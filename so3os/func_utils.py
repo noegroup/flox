@@ -1,15 +1,15 @@
-from dataclasses import dataclass
 from functools import reduce, wraps
 import inspect
 from itertools import chain
 from typing import TypeVar, Callable, Any, Tuple, Iterable
 
+import equinox as eqx
 
 UndefinedReturn = TypeVar("?")
 UndefinedArgs = TypeVar("?")
 
 
-def pack_args(fn: Callable) -> Callable:
+def unpack_args(fn: Callable) -> Callable:
     """ modifies call signture of `fn` from
             fn: *args -> out
         to
@@ -22,8 +22,7 @@ def pack_args(fn: Callable) -> Callable:
     return call
 
 
-@dataclass(init=True, frozen=True)
-class _compose:
+class composed(eqx.Module):
     f: Callable
     g: Callable
 
@@ -63,11 +62,11 @@ class _compose:
 
     def flatten(self) -> Iterable[Callable]:
         """ flattens function graph into a iterator """
-        fs = self.f.flatten() if isinstance(self.f, _compose) else [self.f]
-        gs = self.g.flatten() if isinstance(self.g, _compose) else [self.g]
+        fs = self.f.flatten() if isinstance(self.f, composed) else [self.f]
+        gs = self.g.flatten() if isinstance(self.g, composed) else [self.g]
         return chain(fs, gs)
 
 
-def compose(*fs: Callable):
+def compose(*fs):
     """ composes functions """
-    return reduce(_compose, fs)
+    return reduce(composed, fs)

@@ -1,8 +1,9 @@
-from typing import Reversible, Callable
+from typing import Callable
 
 import jax
 import jax.numpy as jnp
-from jax.experimental import checkify
+
+# from jax.experimental import checkify
 from jaxtyping import Array, Bool, Integer
 
 
@@ -10,9 +11,7 @@ Condition = Bool[Array, "*dims"]
 BranchIndex = Integer[Array, "*dims"]
 
 
-def _select_branch(
-    conds: Reversible[Condition], branches: Reversible[BranchIndex]
-) -> BranchIndex:
+def _select_branch(conds, branches) -> BranchIndex:
     """ chains multiple jnp.where clauses and executes them in reverse order """
 
     accum = jnp.zeros_like(conds[0]) - 1
@@ -47,7 +46,7 @@ class Switch:
         if len(self.branches) == 0:
             raise ValueError("Need at least one branch!")
         index = _select_branch(self.conditions, jnp.arange(len(self.branches)))
-        checkify.check(jnp.all(index >= 0), "No branch matches condition!")
+        # checkify.check(jnp.all(index >= 0), "No branch matches condition!")
         return jax.lax.switch(index, self.branches, *operands)
 
 

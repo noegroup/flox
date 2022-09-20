@@ -1,15 +1,17 @@
 import jax.numpy as jnp
 
 from .jax_utils import Switch
-from .geometry import Vector3, Quaternion, Mat4x4, Mat3x3
+from .geometry import Vector, Matrix
+
+Quaternion = Vector(4)
 
 
-def to_quat(r: Vector3) -> Quaternion:
+def to_quat(r: Vector(3)) -> Quaternion:
     """ embeds a 3D vector as a quaternion """
     return jnp.concatenate((jnp.zeros((1,)), r))
 
 
-def from_quat(q: Quaternion) -> Vector3:
+def from_quat(q: Quaternion) -> Vector(3):
     """ projects a quaternion on its 3D vector component """
     return q[1:]
 
@@ -28,7 +30,7 @@ def qprod(qa: Quaternion, qb: Quaternion) -> Quaternion:
     )
 
 
-def qmat(q: Quaternion) -> Mat4x4:
+def qmat(q: Quaternion) -> Matrix(4, 4):
     """ maps a quaternion on its 4x4 matrix representing the
         quaternion product """
     w1, x1, y1, z1 = q
@@ -48,14 +50,14 @@ def qconj(q: Quaternion) -> Quaternion:
     return jnp.stack([w0, -x0, -y0, -z0])
 
 
-def qrot3d(q: Quaternion, r: Vector3) -> Vector3:
+def qrot3d(q: Quaternion, r: Vector(3)) -> Vector(3):
     """ rotates a 3D vector by a quaternion """
     p = to_quat(r)
     p_ = qprod(q, qprod(p, qconj(q)))
     return from_quat(p_)
 
 
-def quat_to_mat(q: Quaternion) -> Mat3x3:
+def quat_to_mat(q: Quaternion) -> Matrix(3, 3):
     """ projects quaternion onto the corresponding
         3x3 rotation matrix
 
@@ -89,7 +91,7 @@ def quat_to_mat(q: Quaternion) -> Mat3x3:
     )
 
 
-def mat_to_quat(R: Mat3x3) -> Quaternion:
+def mat_to_quat(R: Matrix(3, 3)) -> Quaternion:
     """ embeds 3x3 rotation matrix as *one* of two possible
         quaternion preimages
 

@@ -1,10 +1,12 @@
 from functools import partial
 
 import jax.numpy as jnp
-from .geometry import EulerAngles, Mat3x3, Mat2x2, Scalar
+from .geometry import Matrix, Vector, Scalar
+
+EulerAngles = Vector(3)
 
 
-def rotmat2d(theta: Scalar) -> Mat2x2:
+def rotmat2d(theta: Scalar) -> Matrix(2, 2):
     """ returns a 2D rotation matrix
         rotating around the angle `theta` """
     ct = jnp.cos(theta)
@@ -12,7 +14,7 @@ def rotmat2d(theta: Scalar) -> Mat2x2:
     return jnp.array([[ct, -st], [st, ct]])
 
 
-def canonical_rotation(theta: Scalar, axis: int) -> Mat3x3:
+def canonical_rotation(theta: Scalar, axis: int) -> Matrix(3, 3):
     """ returns matrix of a 2D rotation in 3D
         along the specified `axis` """
     axes = jnp.array(list(set(range(3)) - {axis}))
@@ -20,7 +22,7 @@ def canonical_rotation(theta: Scalar, axis: int) -> Mat3x3:
     return jnp.eye(3).at[x, y].set(rotmat2d(theta))
 
 
-def to_euler(R: Mat3x3) -> EulerAngles:
+def to_euler(R: Matrix(3, 3)) -> EulerAngles:
     """ converts a 3x3 rotation matrix to canonical rotations
         given in ZXZ euler angles """
     alpha = jnp.arctan2(R[0, 2], R[1, 2])
@@ -29,7 +31,7 @@ def to_euler(R: Mat3x3) -> EulerAngles:
     return jnp.stack([alpha, beta, gamma])
 
 
-def from_euler(angles: EulerAngles) -> Mat3x3:
+def from_euler(angles: EulerAngles) -> Matrix(3, 3):
     """ converts canonical rotations given in ZXZ euler angles
         into 3x3 rotation matrices """
     alpha, beta, gamma = angles

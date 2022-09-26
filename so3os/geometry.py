@@ -15,16 +15,15 @@ def UnitVector(N: int | str):
     return Vector(N)
 
 
-UnitVector2 = Float[Array, "2"]
-UnitVectorN = Float[Array, "N"]
-
-
 def Matrix(N: int | str, M: int | str):
     return Float[Array, f"{N} {M}"]
 
 
 def TangentBasis(N: int | str):
-    return Matrix(f"{N}-1", N)
+    if isinstance(N, int) or N.isdigit():
+        return Matrix(f"{int(N) - 1}", N)
+    else:
+        return Matrix(f"{N}-1", N)
 
 
 def proj(v: Vector("N"), u: Vector("N")) -> Vector("N"):

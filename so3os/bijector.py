@@ -5,15 +5,19 @@ import equinox as eqx
 import jax.numpy as jnp
 from jaxtyping import PyTree
 import lenses
-from typing import Callable, Tuple
+from typing import Callable, Tuple, Any
 
 from .geometry import Scalar
 from .func_utils import compose, composed
 
 
+Bijector = Callable[[Any, ...], Tuple[PyTree, Scalar]]
+VolumeAggregatingBijector = Callable[[Tuple[PyTree, Scalar]], Tuple[PyTree, Scalar]]
+
+
 class bijector(eqx.Module):
-    forward: eqx.Module | Callable
-    inverse: eqx.Module | Callable | None = None
+    forward: eqx.Module | Bijector
+    inverse: eqx.Module | Bijector | None = None
 
     def __post_init__(self):
         object.__setattr__(self, "__signature__", inspect.signature(self.forward))
@@ -73,8 +77,13 @@ class conditional_bijector(eqx.Module):
         return out, dlogp
 
 
+@invert.register
+def _(bij: conditional_bijector):
+    return lenses.bind(bij).transform.modify(invert)
+
+
 class accumulate_volume(eqx.Module):
-    bijector: eqx.Module
+    bijector: eqx.Module | Bijector
 
     def __call__(self, node_and_vol: Tuple[PyTree, Scalar]) -> Tuple[PyTree, Scalar]:
         node, vol = node_and_vol
@@ -85,10 +94,6 @@ class accumulate_volume(eqx.Module):
 @invert.register
 def _(acc: accumulate_volume):
     return accumulate_volume(invert(acc.bijector))
-
-
-def composed_bijector(*bijectors: Tuple[Callable]) -> Callable:
-    return compose(*map(accumulate_volume, bijectors))
 
 
 @invert.register

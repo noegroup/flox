@@ -69,6 +69,17 @@ def double_moebius_volume_change(
     return numer / (eps + denom)
 
 
+def double_moebius_inverse_volume_change(
+    p: UnitVectorN, q: VectorN, eps: float = 1e-12
+) -> Scalar:
+    qq = inner(q, q)
+    qp = inner(q, p)
+    dim = len(p)
+    numer = (1.0 + qq) * (1.0 - qq) ** (dim - 1)
+    denom = jnp.clip(((qq - 1.0) ** 2 + (2.0 * qp) ** 2), eps) ** (dim / 2)
+    return numer / (eps + denom)
+
+
 def moebius_volume_change(p: UnitVectorN, q: VectorN, eps: float = 1e-12) -> Scalar:
     dim = len(p)
     numer = -(inner(q, q) - 1)

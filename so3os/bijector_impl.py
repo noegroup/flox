@@ -11,6 +11,7 @@ from .moebius import (
     double_moebius_project,
     double_moebius_inverse,
     double_moebius_volume_change,
+    double_moebius_inverse_volume_change,
 )
 from .rigid import (
     from_euclidean,
@@ -49,10 +50,7 @@ def _double_moebius_forward(p: UnitVectorN, q: VectorN) -> tuple[UnitVectorN, Sc
 
 def _double_moebius_inverse(p: UnitVectorN, q: VectorN) -> tuple[UnitVectorN, Scalar]:
     p_ = double_moebius_inverse(p, q)
-    vol = volume_change(
-        partial(double_moebius_inverse, q=q),
-        partial(tangent_space, method="gram-schmidt"),
-    )(p)
+    vol = double_moebius_inverse_volume_change(p, q)
     return p_, jnp.log(vol)
 
 

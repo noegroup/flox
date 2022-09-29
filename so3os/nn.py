@@ -1,6 +1,6 @@
 from collections.abc import Sequence, Callable, Generator
 
-import equinox as eqx
+import equinox as eqx  # type: ignore
 import jax.numpy as jnp
 
 from .jax_utils import key_chain

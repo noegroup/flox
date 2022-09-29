@@ -14,7 +14,7 @@ def proj(v: VectorN, u: VectorN) -> VectorN:
 def gram_schmidt(vs: MatrixNxM) -> MatrixNxM:
     """transforms `num` vectors with `dim` dimensions into an orthonomal bundle
     using the Gram-Schmidt method"""
-    us = []
+    us: list[VectorN] = []
     for v in vs:
         u = v
         for u in us:
@@ -86,7 +86,7 @@ def volume_change(
         if j.shape == (1, 1):
             return j.reshape()
         e = tangent_space(p)
-        ej = j @ e.T
+        ej = j @ e.T  # type: ignore
         g = ej.T @ ej
         return jnp.sqrt(jnp.linalg.det(g))
 

@@ -4,7 +4,7 @@ import inspect
 from itertools import chain
 from typing import TypeVar, Any, ParamSpec, Generic
 
-import equinox as eqx
+import equinox as eqx  # type: ignore
 
 UndefinedReturn = TypeVar("UndefinedReturn")
 UndefinedArgs = TypeVar("UndefinedArgs")

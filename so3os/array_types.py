@@ -1,4 +1,5 @@
 from jaxtyping import Float  # pyright: reportPrivateImportUsage=false
+
 from jax import Array  # pyright: reportGeneralTypeIssues=false
 
 Scalar = Float[Array, ""]

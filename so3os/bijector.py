@@ -1,21 +1,20 @@
 from collections.abc import Callable
 from functools import singledispatch, wraps, partial
 import inspect
-from typing import Concatenate, ParamSpec
+from typing import Concatenate, ParamSpec, Tuple, TypeAlias
 
-import equinox as eqx
+import equinox as eqx  # type: ignore
 import jax.numpy as jnp
 from jaxtyping import PyTree
-import lenses
+import lenses  # type: ignore
 
 from .geometry import Scalar
 from .func_utils import compose, composed, unpack_args, unpacked_args
 
 P = ParamSpec("P")
 
-Transform = Callable[..., tuple[PyTree, Scalar]] | eqx.Module
-Bijector = Transform
-AccumTransform = Callable[Concatenate[tuple, Scalar, P], tuple[PyTree, Scalar]]
+Transform: TypeAlias = Callable[..., Tuple[PyTree, Scalar]] | eqx.Module
+Bijector: TypeAlias = Transform
 
 
 class bijector(eqx.Module):
@@ -63,8 +62,8 @@ class conditional_bijector(eqx.Module):
     transform: Transform
     context: lenses.ui.base.BaseUiLens
     target: lenses.ui.base.BaseUiLens
-    params: Callable[[PyTree], PyTree]
-    bind: Callable = default_bind
+    params: Callable[[PyTree], tuple]
+    bind: Callable[..., PyTree] = default_bind
 
     def __call__(self, node: PyTree) -> PyTree:
         node = lenses.bind(node)

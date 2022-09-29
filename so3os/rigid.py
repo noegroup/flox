@@ -4,12 +4,13 @@ from typing import Tuple
 import jax
 import jax.numpy as jnp
 
-from .geometry import Matrix, Vector, Scalar, unit, norm, inner, squared_norm
+from .array_types import Quaternion, Matrix3x3, Vector3, Scalar
+from .geometry import unit, norm, inner, squared_norm
 from .quaternion import Quaternion, qrot3d, mat_to_quat
 
 
-def tripod(frame: Matrix(3, 3)) -> Matrix(3, 3):
-    """ computes a unique orthogonal basis for input points """
+def tripod(frame: Matrix3x3) -> Matrix3x3:
+    """computes a unique orthogonal basis for input points"""
     p1, p2, p3 = frame
     e1 = unit(p2 - p1)
     e2 = unit(jnp.cross(p3 - p1, e1))
@@ -18,8 +19,12 @@ def tripod(frame: Matrix(3, 3)) -> Matrix(3, 3):
 
 
 def to_euclidean(
-    q: Quaternion, p: Vector(3), r0: Scalar, r1: Scalar, a: Scalar,
-):
+    q: Quaternion,
+    p: Vector3,
+    r0: Scalar,
+    r1: Scalar,
+    a: Scalar,
+) -> Matrix3x3:
     """ converts from pose + internal dofs into euclidean coordinates
 
         the internal dofs are the two edge lengths and the inner angle
@@ -43,15 +48,13 @@ def to_euclidean(
 
 
 def from_euclidean(
-    frame: Matrix(3, 3),
-) -> Tuple[
-    Quaternion, Vector(3), Scalar, Scalar, Scalar,
-]:
-    """ converts an euclidean frame into pose + internal dofs
+    frame: Matrix3x3,
+) -> Tuple[Quaternion, Vector3, Scalar, Scalar, Scalar,]:
+    """converts an euclidean frame into pose + internal dofs
 
-        the internal dofs are the two edge lengths and the inner angle
-        of the triangle spanned by the three points defining the frame
-        (see `to_euclidean`)
+    the internal dofs are the two edge lengths and the inner angle
+    of the triangle spanned by the three points defining the frame
+    (see `to_euclidean`)
     """
     q = mat_to_quat(tripod(frame))
     p = frame[(0,)]
@@ -62,13 +65,17 @@ def from_euclidean(
     return q, p, r0, r1, a
 
 
-def to_euclidean_log_jacobian(r0: Scalar, r1: Scalar, a: Scalar) -> Scalar:
-    r0sq = r0 ** 2
-    r1sq = r1 ** 2
+def to_euclidean_log_jacobian(
+    r0: Scalar,
+    r1: Scalar,
+    a: Scalar,
+) -> Scalar:
+    r0sq = r0**2
+    r1sq = r1**2
     return jnp.log(8 * r0sq * r1sq * jnp.cos(a)) + 0.5 * jnp.log(4 * (r0sq + r1sq) + 1)
 
 
-def from_euclidean_log_jacobian(frame: Matrix(3, 3)) -> Scalar:
+def from_euclidean_log_jacobian(frame: Matrix3x3) -> Scalar:
     p0 = frame[(0,)]
     frame = frame - p0
     r0sq = squared_norm(frame[0] - frame[1])

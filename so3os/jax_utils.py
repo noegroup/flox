@@ -1,10 +1,10 @@
-from typing import Callable
+from collections.abc import Callable, Generator
 
 import jax
 import jax.numpy as jnp
+from jax import Array  # pyright: reportGeneralTypeIssues=false
 
-# from jax.experimental import checkify
-from jaxtyping import Array, Bool, Integer
+from jaxtyping import Bool, Integer  # pyright: reportPrivateImportUsage=false
 
 
 Condition = Bool[Array, "*dims"]
@@ -12,7 +12,7 @@ BranchIndex = Integer[Array, "*dims"]
 
 
 def _select_branch(conds, branches) -> BranchIndex:
-    """ chains multiple jnp.where clauses and executes them in reverse order """
+    """chains multiple jnp.where clauses and executes them in reverse order"""
 
     accum = jnp.zeros_like(conds[0]) - 1
     for (cond, val) in reversed(tuple(zip(conds, branches, strict=True))):
@@ -21,7 +21,7 @@ def _select_branch(conds, branches) -> BranchIndex:
 
 
 class Switch:
-    """ Implements a convenience decorator for handling switch-case control flow"""
+    """Implements a convenience decorator for handling switch-case control flow"""
 
     def __init__(self):
         self.conditions = []
@@ -50,11 +50,13 @@ class Switch:
         return jax.lax.switch(index, self.branches, *operands)
 
 
-def key_chain(seed: int | jnp.ndarray):
-    """ returns an iterator that automatically splits jax.random.PRNGKeys """
+def key_chain(
+    seed: int | jnp.ndarray | jax.random.PRNGKeyArray,
+) -> Generator[jax.random.PRNGKeyArray, None, None]:
+    """returns an iterator that automatically splits jax.random.PRNGKeys"""
 
     if isinstance(seed, int) or seed.ndim == 0:
-        key = jax.random.PRNGKey(seed)
+        key = jax.random.PRNGKey(int(seed))
     else:
         key, _ = jax.random.split(seed)
     while True:

@@ -1,15 +1,17 @@
-from typing import Iterable, Callable, Generator
+from collections.abc import Sequence, Callable, Generator
 
 import equinox as eqx
-import jax
+import jax.numpy as jnp
 
 from .jax_utils import key_chain
 
+Activation = Callable[[jnp.ndarray], jnp.ndarray]
+
 
 def dense(
-    key: jax.random.PRNGKey,
-    units: Iterable[int],
-    activation: Callable | None = None,
+    key: int | jnp.ndarray,
+    units: Sequence[int],
+    activation: Activation | None = None,
     norm: bool = True,
 ) -> Generator[eqx.Module, None, None]:
     chain = key_chain(key)

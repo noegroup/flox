@@ -1,25 +1,36 @@
-from functools import reduce, wraps
+from collections.abc import Callable, Iterable
+from functools import reduce
 import inspect
 from itertools import chain
-from typing import TypeVar, Callable, Any, Tuple, Iterable
+from typing import TypeVar, Any, ParamSpec, Generic
 
 import equinox as eqx
 
-UndefinedReturn = TypeVar("?")
-UndefinedArgs = TypeVar("?")
+UndefinedReturn = TypeVar("UndefinedReturn")
+UndefinedArgs = TypeVar("UndefinedArgs")
 
 
-def unpack_args(fn: Callable) -> Callable:
-    """ modifies call signture of `fn` from
-            fn: *args -> out
-        to
-            fn: args -> out """
+P = ParamSpec("P")
+R = TypeVar("R")
 
-    @wraps(fn)
-    def call(arg: Tuple[Any, ...]) -> Any:
-        return fn(*arg)
 
-    return call
+class unpacked_args(eqx.Module, Generic[R]):
+
+    fn: Callable
+
+    def __init__(self, fn: Callable[P, R]):
+        self.fn = fn
+
+    def __call__(self, arg: tuple) -> R:
+        return self.fn(*arg)
+
+
+def unpack_args(fn: Callable[P, R]) -> Callable[[tuple], R]:
+    """modifies call signture of `fn` from
+        fn: *args -> out
+    to
+        fn: args -> out"""
+    return unpacked_args(fn)
 
 
 class composed(eqx.Module):
@@ -40,7 +51,7 @@ class composed(eqx.Module):
         sig = inspect.signature(self)
         fns = tuple(self.flatten())
         try:
-            params = inspect.signature(fns[-1]).parameters.values()
+            params = tuple(inspect.signature(fns[-1]).parameters.values())
         except ValueError:
             params = (
                 inspect.Parameter(
@@ -61,12 +72,12 @@ class composed(eqx.Module):
         return sig.replace(parameters=params, return_annotation=return_annotation)
 
     def flatten(self) -> Iterable[Callable]:
-        """ flattens function graph into a iterator """
+        """flattens function graph into a iterator"""
         fs = self.f.flatten() if isinstance(self.f, composed) else [self.f]
         gs = self.g.flatten() if isinstance(self.g, composed) else [self.g]
         return chain(fs, gs)
 
 
 def compose(*fs):
-    """ composes functions """
+    """composes functions"""
     return reduce(composed, fs)

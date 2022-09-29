@@ -1,23 +1,21 @@
 import jax.numpy as jnp
 
 from .jax_utils import Switch
-from .geometry import Vector, Matrix
-
-Quaternion = Vector(4)
+from .array_types import Vector3, Matrix3x3, Matrix4x4, Quaternion
 
 
-def to_quat(r: Vector(3)) -> Quaternion:
-    """ embeds a 3D vector as a quaternion """
+def to_quat(r: Vector3) -> Quaternion:
+    """embeds a 3D vector as a quaternion"""
     return jnp.concatenate((jnp.zeros((1,)), r))
 
 
-def from_quat(q: Quaternion) -> Vector(3):
-    """ projects a quaternion on its 3D vector component """
+def from_quat(q: Quaternion) -> Vector3:
+    """projects a quaternion on its 3D vector component"""
     return q[1:]
 
 
 def qprod(qa: Quaternion, qb: Quaternion) -> Quaternion:
-    """ quaternion product """
+    """quaternion product"""
     w0, x0, y0, z0 = qa
     w1, x1, y1, z1 = qb
     return jnp.stack(
@@ -30,9 +28,9 @@ def qprod(qa: Quaternion, qb: Quaternion) -> Quaternion:
     )
 
 
-def qmat(q: Quaternion) -> Matrix(4, 4):
-    """ maps a quaternion on its 4x4 matrix representing the
-        quaternion product """
+def qmat(q: Quaternion) -> Matrix4x4:
+    """maps a quaternion on its 4x4 matrix representing the
+    quaternion product"""
     w1, x1, y1, z1 = q
     return jnp.stack(
         [
@@ -45,30 +43,30 @@ def qmat(q: Quaternion) -> Matrix(4, 4):
 
 
 def qconj(q: Quaternion) -> Quaternion:
-    """ conjugates the quaternion """
+    """conjugates the quaternion"""
     w0, x0, y0, z0 = q
     return jnp.stack([w0, -x0, -y0, -z0])
 
 
-def qrot3d(q: Quaternion, r: Vector(3)) -> Vector(3):
-    """ rotates a 3D vector by a quaternion """
+def qrot3d(q: Quaternion, r: Vector3) -> Vector3:
+    """rotates a 3D vector by a quaternion"""
     p = to_quat(r)
     p_ = qprod(q, qprod(p, qconj(q)))
     return from_quat(p_)
 
 
-def quat_to_mat(q: Quaternion) -> Matrix(3, 3):
-    """ projects quaternion onto the corresponding
-        3x3 rotation matrix
+def quat_to_mat(q: Quaternion) -> Matrix3x3:
+    """projects quaternion onto the corresponding
+    3x3 rotation matrix
 
-        this is a surjective but not injective map!
+    this is a surjective but not injective map!
     """
     qw, qi, qj, qk = q
     return jnp.stack(
         [
             jnp.stack(
                 [
-                    1 - 2 * (qj ** 2 + qk ** 2),
+                    1 - 2 * (qj**2 + qk**2),
                     2 * (qi * qj - qk * qw),
                     2 * (qi * qk + qj * qw),
                 ]
@@ -76,7 +74,7 @@ def quat_to_mat(q: Quaternion) -> Matrix(3, 3):
             jnp.stack(
                 [
                     2 * (qi * qj + qk * qw),
-                    1 - 2 * (qi ** 2 + qk ** 2),
+                    1 - 2 * (qi**2 + qk**2),
                     2 * (qj * qk - qi * qw),
                 ]
             ),
@@ -84,18 +82,18 @@ def quat_to_mat(q: Quaternion) -> Matrix(3, 3):
                 [
                     2 * (qi * qk - qj * qw),
                     2 * (qj * qk + qi * qw),
-                    1 - 2 * (qi ** 2 + qj ** 2),
+                    1 - 2 * (qi**2 + qj**2),
                 ]
             ),
         ]
     )
 
 
-def mat_to_quat(R: Matrix(3, 3)) -> Quaternion:
-    """ embeds 3x3 rotation matrix as *one* of two possible
-        quaternion preimages
+def mat_to_quat(R: Matrix3x3) -> Quaternion:
+    """embeds 3x3 rotation matrix as *one* of two possible
+    quaternion preimages
 
-        this is an injective but not surjective map
+    this is an injective but not surjective map
     """
     tr = jnp.trace(R)
 

@@ -16,9 +16,7 @@ def gram_schmidt(vs: MatrixNxM) -> MatrixNxM:
     using the Gram-Schmidt method"""
     us: list[VectorN] = []
     for v in vs:
-        u = v
-        for u in us:
-            u -= proj(v, u)
+        u = v - sum(proj(v, u) for u in us)
         u = u / norm(u)
         us.append(u)
     q = jnp.stack(us)
@@ -88,6 +86,6 @@ def volume_change(
         e = tangent_space(p)
         ej = j @ e.T  # type: ignore
         g = ej.T @ ej
-        return jnp.sqrt(jnp.linalg.det(g))
+        return jnp.sqrt(jnp.abs(jnp.linalg.det(g)))
 
     return volume

@@ -1,7 +1,7 @@
 from collections.abc import Callable
 from functools import singledispatch, wraps, partial
 import inspect
-from typing import Concatenate, ParamSpec, Tuple, TypeAlias
+from typing import ParamSpec, Tuple, TypeAlias
 
 import equinox as eqx  # type: ignore
 import jax.numpy as jnp
@@ -25,10 +25,10 @@ class bijector(eqx.Module):
         object.__setattr__(self, "__signature__", inspect.signature(self.forward))
 
     def __str__(self):
-        return str(self.forward)
+        return f"bijector({str(self.forward)})"
 
     def __repr__(self):
-        return repr(self.forward)
+        return f"bijector({repr(self.forward)})"
 
     @property
     def __doc__(self):
@@ -143,7 +143,7 @@ def unpack_volume(lens: lenses.ui.base.BaseUiLens) -> lenses.ui.base.BaseUiLens:
 def zoomed_transform(
     lens: lenses.ui.base.BaseUiLens, transform: Transform
 ) -> Transform:
-    return unpack_volume(lens).modify(transform)
+    return wraps(transform)(unpack_volume(lens).modify(transform))
 
 
 def zoomed_bijector(lens: lenses.ui.base.BaseUiLens, transform: Bijector) -> Bijector:

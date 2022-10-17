@@ -1,9 +1,16 @@
 from collections.abc import Callable
+from enum import Enum
+from multiprocessing.sharedctypes import Value
+from typing import cast
 
 import jax
 import jax.numpy as jnp
 
-from .array_types import VectorN, VectorM, UnitVectorN, MatrixNxM, TangentBasisN, Scalar
+from jaxtyping import Float, Array  # type: ignore
+
+
+Scalar = Float[Array, ""]
+VectorN = Float[Array, "N"]
 
 
 def proj(v: VectorN, u: VectorN) -> VectorN:
@@ -11,7 +18,7 @@ def proj(v: VectorN, u: VectorN) -> VectorN:
     return inner(v, u) / inner(u, u) * u
 
 
-def gram_schmidt(vs: MatrixNxM) -> MatrixNxM:
+def gram_schmidt(vs: Float[Array, "M N"]) -> Float[Array, "M N"]:
     """transforms `num` vectors with `dim` dimensions into an orthonomal bundle
     using the Gram-Schmidt method"""
     us: list[VectorN] = []
@@ -20,7 +27,11 @@ def gram_schmidt(vs: MatrixNxM) -> MatrixNxM:
         u = u / norm(u)
         us.append(u)
     q = jnp.stack(us)
-    return q
+    return cast(Array, q)
+
+
+def outer(a: VectorN, b: VectorN) -> Float[Array, "N N"]:
+    return a[:, None] * b[None, :]
 
 
 def inner(a: VectorN, b: VectorN) -> Scalar:
@@ -52,30 +63,38 @@ def squared_norm(x: VectorN, eps: float = 1e-12) -> Scalar:
     return inner(x, x)
 
 
-def unit(x: VectorN) -> UnitVectorN:
+def unit(x: VectorN) -> VectorN:
     """normalizes a vector and turns it into a unit vector"""
-    return x / norm(x)
+    return x * jax.lax.rsqrt(squared_norm(x))
+    # return x / norm(x)
 
 
-def tangent_space(p: VectorN, method: str = "svd") -> TangentBasisN:
+class TangentSpaceMethod(Enum):
+    GramSchmidt = 0
+    SVD = 1
+
+
+def tangent_space(
+    p: VectorN, method: TangentSpaceMethod = TangentSpaceMethod.GramSchmidt
+) -> Float[Array, "N-1 N"]:
     """computes tangent space of a point"""
-    if method in "svd":
-        *_, V = jnp.linalg.svd(jnp.outer(p, p))
-        return V[1:]
-    elif method == "gram-schmidt":
-        dim = len(p)
-        vs = jnp.eye(dim)
-        idx = jnp.argsort(vs @ p)
-        vs = jnp.concatenate([p[None], vs[idx[:-1]]])
-        return gram_schmidt(vs)[1:]
-    else:
-        raise ValueError(f"Unknown method {method}.")
+    tangent_space = None
+    match (method):
+        case TangentSpaceMethod.SVD:
+            *_, V = jnp.linalg.svd(jnp.outer(p, p))
+            tangent_space = V[1:]
+        case TangentSpaceMethod.GramSchmidt:
+            dim = len(p)
+            vs = jnp.eye(dim)
+            idx = jnp.argsort(vs @ p)
+            vs = jnp.concatenate([p[None], vs[idx[:-1]]])
+            tangent_space = gram_schmidt(cast(Array, vs))[1:]
+        case _:
+            raise ValueError(f"Unknown tangent space method {method}.")
+    return tangent_space
 
 
-def volume_change(
-    fun: Callable[[VectorN], VectorM],
-    tangent_space: Callable[[VectorN], TangentBasisN],
-) -> Callable[[VectorN], Scalar]:
+def volume_change(fun: Callable[[VectorN], VectorN]) -> Callable[[VectorN], Scalar]:
     """computes volument change of the function N -> M"""
     jac = jax.jacobian(fun)
 

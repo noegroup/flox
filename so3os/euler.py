@@ -1,8 +1,13 @@
 from functools import partial
+from typing import cast
 
 import jax.numpy as jnp
+from jaxtyping import Float, Array  # type: ignore
 
-from .array_types import Matrix2x2, Matrix3x3, EulerAngles, Scalar
+Matrix2x2 = Float[Array, "2 2"]
+Matrix3x3 = Float[Array, "3 3"]
+EulerAngles = Float[Array, "3"]
+Scalar = Float[Array, ""]
 
 
 def rotmat2d(theta: Scalar) -> Matrix2x2:
@@ -10,7 +15,7 @@ def rotmat2d(theta: Scalar) -> Matrix2x2:
     rotating around the angle `theta`"""
     ct = jnp.cos(theta)
     st = jnp.sin(theta)
-    return jnp.array([[ct, -st], [st, ct]])
+    return cast(Array, jnp.array([[ct, -st], [st, ct]]))
 
 
 def canonical_rotation(theta: Scalar, axis: int) -> Matrix3x3:
@@ -27,7 +32,7 @@ def to_euler(R: Matrix3x3) -> EulerAngles:
     alpha = jnp.arctan2(R[0, 2], R[1, 2])
     beta = jnp.arccos(R[2, 2])
     gamma = jnp.arctan2(R[2, 0], -R[2, 1])
-    return jnp.stack([alpha, beta, gamma])
+    return cast(Array, jnp.stack([alpha, beta, gamma]))
 
 
 def from_euler(angles: EulerAngles) -> Matrix3x3:

@@ -1,19 +1,21 @@
 from typing import cast
 
 import jax.numpy as jnp
+from jaxtyping import Float, Array  # type: ignore
 
-from .array_types import UnitVectorN, UnitVector2, VectorN, Scalar
 from .geometry import inner, norm, proj
 
 
-def moebius_project(p: UnitVectorN, q: VectorN) -> UnitVectorN:
+def moebius_project(p: Float[Array, "N"], q: Float[Array, "N"]) -> Float[Array, "N"]:
     """projects p along q back onto the hypersphere
     this is a n-dimensional moebius transform
     """
     return p - 2 * proj(p, q - p)
 
 
-def double_moebius_project(p: UnitVectorN, q: VectorN) -> UnitVectorN:
+def double_moebius_project(
+    p: Float[Array, "N"], q: Float[Array, "N"]
+) -> Float[Array, "N"]:
     """the double moebius transform that satisfies anti-podal symmetry"""
     r = moebius_project(p, q) + moebius_project(p, -q)
     r = r / norm(r)
@@ -21,8 +23,11 @@ def double_moebius_project(p: UnitVectorN, q: VectorN) -> UnitVectorN:
 
 
 def invert_on_great_circle(
-    p: UnitVector2, r: Scalar, eps: float = 1e-12, threshold: float = 0.9
-) -> UnitVector2:
+    p: Float[Array, "2"],
+    r: Float[Array, ""],
+    eps: float = 1e-12,
+    threshold: float = 0.9,
+) -> Float[Array, "2"]:
     """invert the double projection on the great circle"""
     x, y = p
     r2 = r**2
@@ -37,10 +42,12 @@ def invert_on_great_circle(
         r > threshold, -jnp.sign(y) * jnp.sqrt(jnp.clip(1.0 - x_**2, eps, 1.0)), y_
     )  # pim's numerical stability modification
 
-    return jnp.stack([x_, y_])
+    return cast(Array, jnp.stack([x_, y_]))
 
 
-def double_moebius_inverse(p: UnitVectorN, q: VectorN) -> UnitVectorN:
+def double_moebius_inverse(
+    p: Float[Array, "N"], q: Float[Array, "N"]
+) -> Float[Array, "N"]:
     """inverts the double projection for general vectors"""
     r = norm(q)
 
@@ -52,15 +59,15 @@ def double_moebius_inverse(p: UnitVectorN, q: VectorN) -> UnitVectorN:
     dy = dy / uy
 
     x, y = invert_on_great_circle(
-        jnp.stack([ux, uy]), r
+        cast(Array, jnp.stack([ux, uy])), r
     )  # solve problem on great circle
 
     return x * dx + y * dy  # project back on hyper-sphere
 
 
 def double_moebius_volume_change(
-    p: UnitVectorN, q: VectorN, eps: float = 1e-12
-) -> Scalar:
+    p: Float[Array, "N"], q: Float[Array, "N"], eps: float = 1e-12
+) -> Float[Array, ""]:
     qq = inner(q, q)
     qp = inner(q, p)
     dim = len(p)
@@ -70,8 +77,8 @@ def double_moebius_volume_change(
 
 
 def double_moebius_inverse_volume_change(
-    p: UnitVectorN, q: VectorN, eps: float = 1e-12
-) -> Scalar:
+    p: Float[Array, "N"], q: Float[Array, "N"], eps: float = 1e-12
+) -> Float[Array, ""]:
     qq = inner(q, q)
     qp = inner(q, p)
     dim = len(p)
@@ -80,7 +87,9 @@ def double_moebius_inverse_volume_change(
     return numer / (eps + denom)
 
 
-def moebius_volume_change(p: UnitVectorN, q: VectorN, eps: float = 1e-12) -> Scalar:
+def moebius_volume_change(
+    p: Float[Array, "N"], q: Float[Array, "N"], eps: float = 1e-12
+) -> Float[Array, ""]:
     dim = len(p)
     numer = -(inner(q, q) - 1)
     denom = inner(q - p, q - p)

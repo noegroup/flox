@@ -1,12 +1,20 @@
+from dataclasses import dataclass
 from functools import partial
-from typing import Tuple
+from typing import Tuple, cast
 
 import jax
 import jax.numpy as jnp
+from jaxtyping import Float, Array  # type: ignore
 
-from .array_types import Quaternion, Matrix3x3, Vector3, Scalar
 from .geometry import unit, norm, inner, squared_norm
-from .quaternion import Quaternion, qrot3d, mat_to_quat
+from .quaternion import qrot3d, mat_to_quat
+
+
+Scalar = Float[Array, ""]
+Matrix3x3 = Float[Array, "3 3"]
+Matrix4x4 = Float[Array, "4 4"]
+Vector3 = Float[Array, "3"]
+Quaternion = Float[Array, "4"]
 
 
 def tripod(frame: Matrix3x3) -> Matrix3x3:
@@ -15,7 +23,7 @@ def tripod(frame: Matrix3x3) -> Matrix3x3:
     e1 = unit(p2 - p1)
     e2 = unit(jnp.cross(p3 - p1, e1))
     e3 = jnp.cross(e2, e1)
-    return jnp.array([-e3, -e2, e1])
+    return cast(Array, jnp.array([-e3, -e2, e1]))
 
 
 def to_euclidean(
@@ -44,7 +52,7 @@ def to_euclidean(
         a: inner angle of the triangle
     """
     frame = jnp.array([[0, 0, 0], [0, 0, r0], [r1 * jnp.cos(a), 0, r1 * jnp.sin(a)]])
-    return jax.vmap(partial(qrot3d, q))(frame) + p[None]
+    return jax.vmap(partial(qrot3d, q))(cast(Array, frame)) + p[None]
 
 
 def from_euclidean(
@@ -84,3 +92,12 @@ def from_euclidean_log_jacobian(frame: Matrix3x3) -> Scalar:
     return -jnp.log(8 * r0sq * r1sq) - 0.5 * (
         jnp.log(cos_a_sq * (4 * (r0sq + r1sq) + 1))
     )
+
+
+@dataclass
+class Rigid:
+    rotation: Quaternion
+    position: Vector3
+    fst_bond: Scalar
+    snd_bond: Scalar
+    angle: Scalar

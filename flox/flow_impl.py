@@ -1,14 +1,14 @@
 from dataclasses import astuple, dataclass
 import jax.numpy as jnp
 from jaxtyping import Float, Array  # type: ignore
-from so3os.convex import (
+from .convex import (
     forward_log_volume,
     inverse_log_volume,
     numeric_inverse,
     potential_gradient,
 )
 
-from so3os.moebius import (
+from .moebius import (
     double_moebius_inverse,
     double_moebius_inverse_volume_change,
     double_moebius_project,
@@ -16,7 +16,7 @@ from so3os.moebius import (
     moebius_project,
     moebius_volume_change,
 )
-import so3os.rigid as rigid
+import rigid
 from .flow_api import Transformed, Volume
 
 

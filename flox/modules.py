@@ -2,7 +2,7 @@ from typing import Callable, Generic, TypeVar, cast
 
 import haiku as hk
 
-from so3os.flow_api import Transform, Transformed
+from .flow_api import Transform, Transformed
 
 Input = TypeVar("Input")
 Output = TypeVar("Output")

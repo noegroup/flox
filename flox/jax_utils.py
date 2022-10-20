@@ -76,4 +76,4 @@ class FrozenMap(dict[str, Any]):
 
     def __repr__(self):
         inner = ", ".join(f"{key}={value}" for (key, value) in self.items())
-        return f"Parameters({inner})"
+        return f"FrozenMap({inner})"

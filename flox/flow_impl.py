@@ -2,6 +2,7 @@
 
 from dataclasses import astuple
 
+import distrax
 import jax.numpy as jnp
 from jax_dataclasses import pytree_dataclass
 from jaxtyping import Array, Float  # type: ignore
@@ -130,3 +131,16 @@ class Rigid:
         output = rigid.to_euclidean(*astuple(input))
         logprob = rigid.to_euclidean_log_jacobian(*astuple(input))
         return Transformed(output, logprob)
+
+
+@pytree_dataclass(frozen=True)
+class DistraxWrapper:
+    bijector: distrax.Bijector
+
+    def forward(self, input: VectorN) -> Transformed[VectorN]:
+        output, logprob = self.bijector.forward_and_log_det(input)
+        return Transformed(output, jnp.sum(logprob))
+
+    def inverse(self, input: VectorN) -> Transformed[VectorN]:
+        output, logprob = self.bijector.inverse_and_log_det(input)
+        return Transformed(output, jnp.sum(logprob))

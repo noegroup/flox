@@ -3,8 +3,7 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import reduce
-from typing import (Any, Callable, Concatenate, Generic, ParamSpec, TypeVar,
-                    cast)
+from typing import Any, Callable, Concatenate, Generic, ParamSpec, TypeVar, cast
 
 P = ParamSpec("P")
 A = TypeVar("A")

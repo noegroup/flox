@@ -1,3 +1,5 @@
+""" Everything related to training - this is still heavy WIP! """
+
 from functools import partial
 from typing import TypeVar
 

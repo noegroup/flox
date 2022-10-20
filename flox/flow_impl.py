@@ -8,13 +8,21 @@ from jaxtyping import Array, Float  # type: ignore
 
 import flox.rigid as rigid
 
-from .convex import (forward_log_volume, inverse_log_volume, numeric_inverse,
-                     potential_gradient)
+from .convex import (
+    forward_log_volume,
+    inverse_log_volume,
+    numeric_inverse,
+    potential_gradient,
+)
 from .flow_api import Transformed, Volume
-from .moebius import (double_moebius_inverse,
-                      double_moebius_inverse_volume_change,
-                      double_moebius_project, double_moebius_volume_change,
-                      moebius_project, moebius_volume_change)
+from .moebius import (
+    double_moebius_inverse,
+    double_moebius_inverse_volume_change,
+    double_moebius_project,
+    double_moebius_volume_change,
+    moebius_project,
+    moebius_volume_change,
+)
 
 VectorN = Float[Array, "N"]
 VectorM = Float[Array, "M"]

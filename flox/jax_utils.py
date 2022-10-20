@@ -7,8 +7,7 @@ from typing import Any
 import jax
 import jax.numpy as jnp
 from jax import Array
-from jax_dataclasses import \
-    pytree_dataclass  # pyright: reportGeneralTypeIssues=false
+from jax_dataclasses import pytree_dataclass  # pyright: reportGeneralTypeIssues=false
 from jaxtyping import Bool, Integer  # pyright: reportPrivateImportUsage=false
 
 Condition = Bool[Array, "*dims"]

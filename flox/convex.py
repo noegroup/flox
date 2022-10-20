@@ -2,8 +2,7 @@
 
 from collections.abc import Callable
 from functools import partial, wraps
-from typing import (Any, Concatenate, Mapping, ParamSpec, Protocol, TypeVar,
-                    cast)
+from typing import Any, Concatenate, Mapping, ParamSpec, Protocol, TypeVar, cast
 
 import jax
 import jax.numpy as jnp
@@ -12,8 +11,7 @@ from jaxopt._src.lbfgs import LBFGS
 from jaxtyping import Array, Bool, Float  # type: ignore
 
 from .func_utils import compose, pipe
-from .geometry import (TangentSpaceMethod, inner, squared_norm, tangent_space,
-                       unit)
+from .geometry import TangentSpaceMethod, inner, squared_norm, tangent_space, unit
 
 Scalar = Float[Array, ""]
 VectorN = Float[Array, "N"]

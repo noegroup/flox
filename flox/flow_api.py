@@ -2,8 +2,7 @@
 
 from collections.abc import Reversible
 from functools import reduce
-from typing import (Callable, Generic, Protocol, TypeVar, cast,
-                    runtime_checkable)
+from typing import Callable, Generic, Protocol, TypeVar, cast, runtime_checkable
 
 from jax_dataclasses import pytree_dataclass
 from jaxtyping import Array, Float  # type: ignore

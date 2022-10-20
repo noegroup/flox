@@ -1,3 +1,5 @@
+""" Everything related to sampling. Still WIP! """
+
 from typing import Generic, Protocol, TypeVar, cast, runtime_checkable
 
 import jax

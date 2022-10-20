@@ -13,6 +13,11 @@ from .flow_api import Input, Output, T, Transformed, VolumeAccumulator
 T = TypeVar("T")
 
 
+class FlowFactory(Protocol[Input, Output]):
+    def __call__(self) -> VolumeAccumulator[Input, Output]:
+        ...
+
+
 class VolumeAccumulatorFactory(Protocol[Input, Output]):
     def __call__(self) -> VolumeAccumulator[Input, Output]:
         ...
@@ -45,7 +50,7 @@ class LayerStack(hk.Module, VolumeAccumulator[T, T]):
 
         self.stack = hk.without_apply_rng(
             hk.transform(
-                hk.experimental.layer_stack(
+                hk.experimental.layer_stack(  # type: ignore
                     name="layer_stack",
                     num_layers=num_layers,
                 )(body)
@@ -59,7 +64,7 @@ class LayerStack(hk.Module, VolumeAccumulator[T, T]):
         reverse: bool = False,
     ) -> tuple[Transformed[T] | None, Transformed[T] | None]:
         init_rng = hk.next_rng_key() if hk.running_init() else None
-        params = hk.experimental.transparent_lift(self.stack.init, allow_reuse=True)(
+        params = hk.experimental.transparent_lift(self.stack.init, allow_reuse=True)(    # type: ignore
             init_rng, inp, out, reverse=reverse
         )
         return self.stack.apply(params, inp, out, reverse=reverse)
@@ -82,17 +87,12 @@ def dense(units, activation, name="dense"):
             dense(units=[128, 3], activation=jax.nn.silu)
     """
     layers = []
-    with hk.experimental.name_scope(name):
+    with hk.experimental.name_scope(name):  # type: ignore
         for idx, out in enumerate(units):
             layers.append(hk.Linear(out))
             if idx < len(units) -1:
                 layers.append(activation)
     return hk.Sequential(layers, name=name)
-
-
-class FlowFactory(Protocol[Input, Output]):
-    def __call__(self) -> VolumeAccumulator[Input, Output]:
-        ...
 
 
 @pytree_dataclass(frozen=True)
@@ -115,7 +115,7 @@ class MultiTransformedFlow(Generic[Input, Output]):
 
 def transform_flow(factory: FlowFactory[Input, Output]) -> MultiTransformedFlow[Input, Output]:
 
-    def body():
+    def transformed():
         flow = factory()
 
         def init(input: Transformed[Input]) -> Transformed[Input]:
@@ -129,6 +129,6 @@ def transform_flow(factory: FlowFactory[Input, Output]) -> MultiTransformedFlow[
 
         return init, (forward, inverse)
 
-    pure = hk.without_apply_rng(hk.multi_transform(body))
+    pure = hk.without_apply_rng(hk.multi_transform(transformed))
 
     return MultiTransformedFlow[Input, Output](pure)

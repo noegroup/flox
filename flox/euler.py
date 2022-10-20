@@ -1,8 +1,10 @@
+""" Everything related to Euler-angle representations of SO(3). """
+
 from functools import partial
 from typing import cast
 
 import jax.numpy as jnp
-from jaxtyping import Float, Array  # type: ignore
+from jaxtyping import Array, Float  # type: ignore
 
 Matrix2x2 = Float[Array, "2 2"]
 Matrix3x3 = Float[Array, "3 3"]

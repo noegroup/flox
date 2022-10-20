@@ -1,14 +1,15 @@
-from dataclasses import dataclass
+""" Everything related to rigid bodies. """
+
 from functools import partial
-from typing import Tuple, cast
+from typing import cast
 
 import jax
 import jax.numpy as jnp
-from jaxtyping import Float, Array  # type: ignore
+from jax_dataclasses import pytree_dataclass
+from jaxtyping import Array, Float  # type: ignore
 
-from .geometry import unit, norm, inner, squared_norm
-from .quaternion import qrot3d, mat_to_quat
-
+from .geometry import inner, norm, squared_norm, unit
+from .quaternion import mat_to_quat, qrot3d
 
 Scalar = Float[Array, ""]
 Matrix3x3 = Float[Array, "3 3"]
@@ -51,13 +52,13 @@ def to_euclidean(
         r0, r1: edge lengths of the triangle
         a: inner angle of the triangle
     """
-    frame = jnp.array([[0, 0, 0], [0, 0, r0], [r1 * jnp.cos(a), 0, r1 * jnp.sin(a)]])
+    frame = jnp.array([[0, 0, 0], [0, 0, r0], [r1 * jnp.sin(a), 0, r1 * jnp.cos(a)]])
     return jax.vmap(partial(qrot3d, q))(cast(Array, frame)) + p[None]
 
 
 def from_euclidean(
     frame: Matrix3x3,
-) -> Tuple[Quaternion, Vector3, Scalar, Scalar, Scalar,]:
+) -> tuple[Quaternion, Vector3, Scalar, Scalar, Scalar,]:
     """converts an euclidean frame into pose + internal dofs
 
     the internal dofs are the two edge lengths and the inner angle
@@ -66,21 +67,23 @@ def from_euclidean(
     """
     q = mat_to_quat(tripod(frame))
     p = frame[(0,)]
-    frame = frame - p
-    r0 = norm(frame[0] - frame[1])
-    r1 = norm(frame[0] - frame[2])
-    a = jnp.arcsin(inner(unit(frame[1]), unit(frame[2])))
+    frame = p - frame
+    r0 = norm(frame[1])
+    r1 = norm(frame[2])
+    a = jnp.arccos(inner(unit(frame[1]), unit(frame[2])))
     return q, p, r0, r1, a
 
 
 def to_euclidean_log_jacobian(
+    q: Quaternion,
+    p: Vector3,
     r0: Scalar,
     r1: Scalar,
     a: Scalar,
 ) -> Scalar:
     r0sq = r0**2
     r1sq = r1**2
-    return jnp.log(8 * r0sq * r1sq * jnp.cos(a)) + 0.5 * jnp.log(4 * (r0sq + r1sq) + 1)
+    return jnp.log(8 * r0sq * r1sq * jnp.sin(a)) + 0.5 * jnp.log(4 * (r0sq + r1sq) + 1)
 
 
 def from_euclidean_log_jacobian(frame: Matrix3x3) -> Scalar:
@@ -94,7 +97,7 @@ def from_euclidean_log_jacobian(frame: Matrix3x3) -> Scalar:
     )
 
 
-@dataclass
+@pytree_dataclass
 class Rigid:
     rotation: Quaternion
     position: Vector3

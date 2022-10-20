@@ -1,7 +1,10 @@
-from collections.abc import Callable
-from functools import reduce
-from typing import Concatenate, TypeVar, Any, ParamSpec, cast
+""" Functional utilities. """
 
+from collections.abc import Callable
+from dataclasses import dataclass
+from functools import reduce
+from typing import (Any, Callable, Concatenate, Generic, ParamSpec, TypeVar,
+                    cast)
 
 P = ParamSpec("P")
 A = TypeVar("A")
@@ -34,3 +37,20 @@ def pipe(
     f: Callable[Concatenate[A, P], Any], *fs: Callable[[Any], Any]
 ) -> Callable[Concatenate[A, P], Any]:
     return cast(Callable[Concatenate[A, P], Any], reduce(pipe2, fs, f))
+
+
+D = TypeVar("D")
+X = TypeVar("X")
+Y = TypeVar("Y")
+
+
+@dataclass(frozen=True)
+class Lens(Generic[A, B, C, D]):
+    project: Callable[[A], C]
+    inject: Callable[[A, D], B]
+
+    def __call__(self, fn: Callable[[C], D]) -> Callable[[A], B]:
+        def lifted(a: A) -> B:
+            return self.inject(a, fn(self.project(a)))
+
+        return lifted

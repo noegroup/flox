@@ -1,7 +1,9 @@
+""" Everything related to Moebius transformations on hyperspheres. """
+
 from typing import cast
 
 import jax.numpy as jnp
-from jaxtyping import Float, Array  # type: ignore
+from jaxtyping import Array, Float  # type: ignore
 
 from .geometry import inner, norm, proj
 

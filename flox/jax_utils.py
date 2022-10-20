@@ -1,11 +1,15 @@
+""" Helper functions for jax-related things. """
+
+from collections import ChainMap
 from collections.abc import Callable, Generator
+from typing import Any
 
 import jax
 import jax.numpy as jnp
-from jax import Array  # pyright: reportGeneralTypeIssues=false
-
+from jax import Array
+from jax_dataclasses import \
+    pytree_dataclass  # pyright: reportGeneralTypeIssues=false
 from jaxtyping import Bool, Integer  # pyright: reportPrivateImportUsage=false
-
 
 Condition = Bool[Array, "*dims"]
 BranchIndex = Integer[Array, "*dims"]
@@ -62,3 +66,14 @@ def key_chain(
     while True:
         new, key = jax.random.split(key)
         yield new
+
+
+@pytree_dataclass(frozen=True)
+class FrozenMap(dict[str, Any]):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        object.__setattr__(self, "__dict__", dict(ChainMap(self.__dict__, kwargs)))
+
+    def __repr__(self):
+        inner = ", ".join(f"{key}={value}" for (key, value) in self.items())
+        return f"Parameters({inner})"

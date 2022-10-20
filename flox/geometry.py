@@ -1,13 +1,11 @@
-from collections.abc import Callable
+""" Everything related to basic Euclidean geometry. """
+
 from enum import Enum
-from multiprocessing.sharedctypes import Value
 from typing import cast
 
 import jax
 import jax.numpy as jnp
-
-from jaxtyping import Float, Array  # type: ignore
-
+from jaxtyping import Array, Float  # type: ignore
 
 Scalar = Float[Array, ""]
 VectorN = Float[Array, "N"]
@@ -92,19 +90,3 @@ def tangent_space(
         case _:
             raise ValueError(f"Unknown tangent space method {method}.")
     return tangent_space
-
-
-def volume_change(fun: Callable[[VectorN], VectorN]) -> Callable[[VectorN], Scalar]:
-    """computes volument change of the function N -> M"""
-    jac = jax.jacobian(fun)
-
-    def volume(p: VectorN) -> Scalar:
-        j = jac(p)
-        if j.shape == (1, 1):
-            return j.reshape()
-        e = tangent_space(p)
-        ej = j @ e.T  # type: ignore
-        g = ej.T @ ej
-        return jnp.sqrt(jnp.abs(jnp.linalg.det(g)))
-
-    return volume

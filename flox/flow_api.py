@@ -1,49 +1,32 @@
-from collections import ChainMap
-from collections.abc import Reversible
-from dataclasses import dataclass
-from functools import reduce
-from typing import (
-    Any,
-    Callable,
-    TypeVar,
-    Protocol,
-    Generic,
-    cast,
-    runtime_checkable,
-)
+""" This module contains the general api for constructing flows. """
 
-import jax_dataclasses as jdc
-from jaxtyping import Float, Array  #  type: ignore
-import lenses
-from lenses.ui.base import BaseUiLens
+from collections.abc import Reversible
+from functools import reduce
+from typing import (Callable, Generic, Protocol, TypeVar, cast,
+                    runtime_checkable)
+
+from jax_dataclasses import pytree_dataclass
+from jaxtyping import Array, Float  # type: ignore
+
+from flox.func_utils import Lens
 
 Volume = Float[Array, ""]
 
 Input = TypeVar("Input")
 Output = TypeVar("Output")
-Context = TypeVar("Context")
 
 T = TypeVar("T")
 
+A = TypeVar("A")
+B = TypeVar("B")
+C = TypeVar("C")
+D = TypeVar("D")
 
-@dataclass
-class Parameters(dict[str, Any]):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        object.__setattr__(self, "__dict__", dict(ChainMap(self.__dict__, kwargs)))
-
-    def __setattr__(self, __name: str, __value: Any) -> None:
-        raise ValueError(f"Cannot change property `{__name}` of immutable Parameters.")
-
-    def __setitem__(self, __key: str, __value: Any) -> None:
-        raise ValueError(f"Cannot set key `{__key}`of immutable Parameters.")
-
-    def __repr__(self):
-        inner = ", ".join(f"{key}={value}" for (key, value) in self.items())
-        return f"Parameters({inner})"
+X = TypeVar("X")
+Y = TypeVar("Y")
 
 
-@jdc.pytree_dataclass
+@pytree_dataclass(frozen=True)
 class Transformed(Generic[T]):
     payload: T
     logprob: Volume
@@ -58,32 +41,77 @@ class Transform(Protocol[Input, Output]):
         ...
 
 
-def unpack_volume(lens: BaseUiLens = lenses.lens) -> BaseUiLens:
-    def setter(state, update) -> Transformed[Any]:
-        return Transformed(lens.set(update.payload)(state), update.logprob)
+@runtime_checkable
+class VolumeAccumulator(Protocol[Input, Output]):
+    def forward(self, input: Transformed[Input]) -> Transformed[Output]:
+        ...
 
-    return lenses.lens.Lens(lens.get(), setter)
-
-
-@dataclass
-class Coupling(Generic[Input, Output]):
-    transform_cstr: Callable[..., Transform[Input, Output]]
-    context: BaseUiLens[Any, Any, Parameters, Any]
-    target: BaseUiLens[Any, Any, Any, Any]
-
-    def forward(self, input: Input) -> Transformed[Output]:
-        context = self.context.get()(input)
-        bound = self.transform_cstr(**context)
-        return unpack_volume(self.target).modify(bound.forward)(input)
-
-    def inverse(self, input: Output) -> Transformed[Input]:
-        context = self.context.get()(input)
-        bound = self.transform_cstr(**context)
-        return unpack_volume(self.target).modify(bound.inverse)(input)
+    def inverse(self, input: Transformed[Output]) -> Transformed[Input]:
+        ...
 
 
-@dataclass
-class VolumeAccumulator(Generic[Input, Output]):
+def unpack_volume(lens: Lens[A, B, C, D]) -> Lens[A, Transformed[B], C, Transformed[D]]:
+    def inject(a: A, new: Transformed[D]) -> Transformed[B]:
+        return Transformed(lens.inject(a, new.payload), new.logprob)
+
+    return Lens(lens.project, inject)
+
+
+@pytree_dataclass(frozen=True)
+class LensedTransform(Transform[A, B], Generic[A, B, C, D]):
+    transform: Transform[C, D]
+    forward_lens: Lens[A, B, C, D]
+    inverse_lens: Lens[B, A, D, C]
+
+    def forward(self, input: A) -> Transformed[B]:
+        return unpack_volume(self.forward_lens)(self.transform.forward)(input)
+
+    def inverse(self, input: B) -> Transformed[A]:
+        return unpack_volume(self.inverse_lens)(self.transform.inverse)(input)
+
+
+@pytree_dataclass(frozen=True)
+class Coupling(Transform[A, B], Generic[A, B, C, D, X, Y]):
+    get_params: Callable[[X], Y]
+    get_forward_transform: Lens[A, Transform[C, D], X, Y]
+    get_inverse_transform: Lens[B, Transform[C, D], X, Y]
+    get_forward_target: Lens[A, B, C, D]
+    get_inverse_target: Lens[B, A, D, C]
+
+    def forward(self, input: A) -> Transformed[B]:
+        transform = self.get_forward_transform(self.get_params)(input)
+        return LensedTransform(
+            transform, self.get_forward_target, self.get_inverse_target
+        ).forward(input)
+
+    def inverse(self, input: B) -> Transformed[A]:
+        transform = self.get_inverse_transform(self.get_params)(input)
+        return LensedTransform(
+            transform, self.get_forward_target, self.get_inverse_target
+        ).inverse(input)
+
+
+@pytree_dataclass(frozen=True)
+class SimpleCoupling(Transform[A, A], Generic[A, C]):
+
+    transform_cstr: Callable[[A], Transform[C, C]]
+    get_target: Lens[A, A, C, C]
+
+    def forward(self, input: A) -> Transformed[A]:
+        transform = self.transform_cstr(input)
+        return LensedTransform(transform, self.get_target, self.get_target).forward(
+            input
+        )
+
+    def inverse(self, input: A) -> Transformed[A]:
+        transform = self.transform_cstr(input)
+        return LensedTransform(transform, self.get_target, self.get_target).inverse(
+            input
+        )
+
+
+@pytree_dataclass(frozen=True)
+class AdditiveVolumeAccumulator(VolumeAccumulator[Input, Output]):
     transform: Transform[Input, Output]
 
     def forward(self, input: Transformed[Input]) -> Transformed[Output]:
@@ -95,9 +123,9 @@ class VolumeAccumulator(Generic[Input, Output]):
         return Transformed(transformed.payload, input.logprob + transformed.logprob)
 
 
-@dataclass
+@pytree_dataclass(frozen=True)
 class Sequential(Generic[Input, Output]):
-    transforms: Reversible[Transform]
+    transforms: Reversible[VolumeAccumulator]
 
     def forward(self, input: Transformed[Input]) -> Transformed[Output]:
         return cast(

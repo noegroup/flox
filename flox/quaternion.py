@@ -1,10 +1,12 @@
+""" Everything related to quaternions. """
+
 from typing import cast
+
 import jax.numpy as jnp
-from jaxtyping import Float, Array  # type: ignore
+from jaxtyping import Array, Float  # type: ignore
 
-from .jax_utils import Switch
 from .geometry import inner
-
+from .jax_utils import Switch
 
 RotationMatrix = Float[Array, "3 3"]
 Matrix3x3 = Float[Array, "3 3"]

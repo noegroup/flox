@@ -1,15 +1,19 @@
+""" Implementation of convex potential flows on spheres. """
+
 from collections.abc import Callable
 from functools import partial, wraps
-from typing import Any, Mapping, ParamSpec, Concatenate, Protocol, TypeVar, cast
+from typing import (Any, Concatenate, Mapping, ParamSpec, Protocol, TypeVar,
+                    cast)
 
 import jax
 import jax.numpy as jnp
-from jaxopt._src.lbfgs import LBFGS
 from jaxopt._src.base import OptStep
-from jaxtyping import Bool, Float, Array  # type: ignore
+from jaxopt._src.lbfgs import LBFGS
+from jaxtyping import Array, Bool, Float  # type: ignore
 
 from .func_utils import compose, pipe
-from .geometry import TangentSpaceMethod, inner, squared_norm, tangent_space, unit
+from .geometry import (TangentSpaceMethod, inner, squared_norm, tangent_space,
+                       unit)
 
 Scalar = Float[Array, ""]
 VectorN = Float[Array, "N"]
@@ -159,18 +163,17 @@ def inverse_log_volume(
             return cast(Callable, transform)(x, *args, **kwargs)
 
         Jx = differential(pin(transform))(x, *args, **kwargs)
+        Jx_pinv: Array = jnp.linalg.pinv(Jx)
         dF = differential(pin(transform), embedded=True)
         dFx = dF(x, *args)
-        dFx_inv = jnp.linalg.inv(dFx)
-        ddFx = jax.jacobian(pin(dF))(x, *args, **kwargs)
+        dFx_inv: Array = jnp.linalg.inv(dFx)
+        ddFx: Array = jax.jacobian(pin(dF))(x, *args, **kwargs)
 
         # differential wrt input
         #                J = original jacobian
         #               PJ = projected jacobian
         #       dx inv(PJ) = inv(PJ) (dx PJ) inv(PJ) pinv(J)
-        ddGx = -jnp.einsum(
-            "ij, jkl, km, ln -> imn", dFx_inv, ddFx, dFx_inv, jnp.linalg.pinv(Jx)
-        )
+        ddGx = -jnp.einsum("ij, jkl, km, ln -> imn", dFx_inv, ddFx, dFx_inv, Jx_pinv)
 
         # differential wrt other args
         ddFargs = jax.jacobian(pin(dF), argnums=range(1, len(args) + 1))(

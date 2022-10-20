@@ -1,24 +1,20 @@
-from dataclasses import astuple, dataclass
+""" This module contains implementations of standard flow layers. """
+
+from dataclasses import astuple
+
 import jax.numpy as jnp
-from jaxtyping import Float, Array  # type: ignore
-from .convex import (
-    forward_log_volume,
-    inverse_log_volume,
-    numeric_inverse,
-    potential_gradient,
-)
+from jax_dataclasses import pytree_dataclass
+from jaxtyping import Array, Float  # type: ignore
 
-from .moebius import (
-    double_moebius_inverse,
-    double_moebius_inverse_volume_change,
-    double_moebius_project,
-    double_moebius_volume_change,
-    moebius_project,
-    moebius_volume_change,
-)
-import rigid
+import flox.rigid as rigid
+
+from .convex import (forward_log_volume, inverse_log_volume, numeric_inverse,
+                     potential_gradient)
 from .flow_api import Transformed, Volume
-
+from .moebius import (double_moebius_inverse,
+                      double_moebius_inverse_volume_change,
+                      double_moebius_project, double_moebius_volume_change,
+                      moebius_project, moebius_volume_change)
 
 VectorN = Float[Array, "N"]
 VectorM = Float[Array, "M"]
@@ -40,7 +36,7 @@ def affine_inverse(
     return affine_forward(p, -shift * jnp.exp(-log_scale), -log_scale)
 
 
-@dataclass
+@pytree_dataclass(frozen=True)
 class Affine:
     shift: VectorN
     scale: VectorN
@@ -58,7 +54,7 @@ def moebius_forward(p: VectorN, q: VectorN) -> tuple[VectorN, Volume]:
     return p_, jnp.log(vol)
 
 
-@dataclass
+@pytree_dataclass(frozen=True)
 class Moebius:
     reflection: VectorN
 
@@ -81,7 +77,7 @@ def double_moebius_inverse_transform(p: VectorN, q: VectorN) -> tuple[VectorN, V
     return p_, jnp.log(vol)
 
 
-@dataclass
+@pytree_dataclass(frozen=True)
 class DoubleMoebius:
     reflection: VectorN
 
@@ -92,7 +88,7 @@ class DoubleMoebius:
         return Transformed(*double_moebius_inverse_transform(input, self.reflection))
 
 
-@dataclass
+@pytree_dataclass(frozen=True)
 class ConvexPotential:
     ctrlpts: MatrixMxN
     weights: VectorM
@@ -115,7 +111,7 @@ class ConvexPotential:
         return Transformed(output, logprob)
 
 
-@dataclass
+@pytree_dataclass(frozen=True)
 class Rigid:
     def forward(self, input: Matrix3x3) -> Transformed[rigid.Rigid]:
         output = rigid.Rigid(*rigid.from_euclidean(input))

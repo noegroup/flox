@@ -1,13 +1,23 @@
 """ This module contains the general api for constructing flows. """
 
 from collections.abc import Reversible
-from functools import reduce
-from typing import Callable, Generic, Protocol, TypeVar, cast, runtime_checkable
+from typing import (
+    Any,
+    Callable,
+    Generic,
+    Iterable,
+    Mapping,
+    Protocol,
+    TypeVar,
+    cast,
+    runtime_checkable,
+)
 
+import jax.numpy as jnp
 from jax_dataclasses import pytree_dataclass
 from jaxtyping import Array, Float  # type: ignore
 
-from flox.func_utils import Lens
+from flox._src.util.func import Lens
 
 Volume = Float[Array, ""]
 
@@ -15,6 +25,7 @@ Input = TypeVar("Input")
 Output = TypeVar("Output")
 
 T = TypeVar("T")
+S = TypeVar("S")
 
 A = TypeVar("A")
 B = TypeVar("B")
@@ -24,11 +35,24 @@ D = TypeVar("D")
 X = TypeVar("X")
 Y = TypeVar("Y")
 
+__all__ = [
+    "Transformed",
+    "Transform",
+    "pure",
+    "bind",
+    "LensedTransform",
+    "Coupling",
+    "SimpleCoupling",
+    "Pipe",
+    "Lambda",
+    "Inverted",
+]
+
 
 @pytree_dataclass(frozen=True)
 class Transformed(Generic[T]):
-    payload: T
-    logprob: Volume
+    obj: T
+    ldj: Volume
 
 
 @runtime_checkable
@@ -40,18 +64,22 @@ class Transform(Protocol[Input, Output]):
         ...
 
 
-@runtime_checkable
-class VolumeAccumulator(Protocol[Input, Output]):
-    def forward(self, input: Transformed[Input]) -> Transformed[Output]:
-        ...
-
-    def inverse(self, input: Transformed[Output]) -> Transformed[Input]:
-        ...
+def pure(obj: T) -> Transformed[T]:
+    """monadic pure operator"""
+    return Transformed(obj, jnp.zeros(()))
 
 
-def unpack_volume(lens: Lens[A, B, C, D]) -> Lens[A, Transformed[B], C, Transformed[D]]:
+def bind(a: Transformed[T], t: Transform[T, S]) -> Transformed[S]:
+    """monadic bind operator"""
+    tb = t.forward(a.obj)
+    return Transformed(tb.obj, tb.ldj + a.ldj)
+
+
+def unpack_volume(
+    lens: Lens[A, B, C, D]
+) -> Lens[A, Transformed[B], C, Transformed[D]]:
     def inject(a: A, new: Transformed[D]) -> Transformed[B]:
-        return Transformed(lens.inject(a, new.payload), new.logprob)
+        return Transformed(lens.inject(a, new.obj), new.ldj)
 
     return Lens(lens.project, inject)
 
@@ -98,50 +126,53 @@ class SimpleCoupling(Transform[A, A], Generic[A, C]):
 
     def forward(self, input: A) -> Transformed[A]:
         transform = self.transform_cstr(input)
-        return LensedTransform(transform, self.get_target, self.get_target).forward(
-            input
-        )
+        return LensedTransform(
+            transform, self.get_target, self.get_target
+        ).forward(input)
 
     def inverse(self, input: A) -> Transformed[A]:
         transform = self.transform_cstr(input)
-        return LensedTransform(transform, self.get_target, self.get_target).inverse(
-            input
-        )
+        return LensedTransform(
+            transform, self.get_target, self.get_target
+        ).inverse(input)
 
 
 @pytree_dataclass(frozen=True)
-class AdditiveVolumeAccumulator(VolumeAccumulator[Input, Output]):
-    transform: Transform[Input, Output]
+class Pipe(Generic[Input, Output]):
+    transforms: Reversible[Transform]
 
-    def forward(self, input: Transformed[Input]) -> Transformed[Output]:
-        transformed = self.transform.forward(input.payload)
-        return Transformed(transformed.payload, input.logprob + transformed.logprob)
+    def forward(self, input: Input) -> Transformed[Output]:
+        accum = pure(input)
+        for t in self.transforms:
+            accum = bind(accum, t)
+        return cast(Transformed[Output], accum)
 
-    def inverse(self, input: Transformed[Output]) -> Transformed[Input]:
-        transformed = self.transform.inverse(input.payload)
-        return Transformed(transformed.payload, input.logprob + transformed.logprob)
+    def inverse(self, input: Output) -> Transformed[Input]:
+        accum = pure(input)
+        for t in map(Inverted, reversed(self.transforms)):
+            accum = bind(accum, t)
+        return cast(Transformed[Input], accum)
 
 
 @pytree_dataclass(frozen=True)
-class Sequential(Generic[Input, Output]):
-    transforms: Reversible[VolumeAccumulator]
+class Lambda(Transform[Input, Output]):
+    forward: Callable[[Input], Transformed[Output]]
+    inverse: Callable[[Output], Transformed[Input]]
 
-    def forward(self, input: Transformed[Input]) -> Transformed[Output]:
-        return cast(
-            Transformed[Output],
-            reduce(
-                lambda input, transform: transform.forward(input),
-                self.transforms,
-                input,
-            ),
-        )
 
-    def inverse(self, input: Transformed[Output]) -> Transformed[Input]:
-        return cast(
-            Transformed[Input],
-            reduce(
-                lambda input, transform: transform.inverse(input),
-                reversed(self.transforms),
-                input,
-            ),
-        )
+@pytree_dataclass(frozen=True)
+class Inverted(Transform[Output, Input]):
+    inverted: Transform[Input, Output]
+
+    def forward(self, input: Output) -> Transformed[Input]:
+        return self.inverted.inverse(input)
+
+    def inverse(self, input: Input) -> Transformed[Output]:
+        return self.inverted.forward(input)
+
+
+class UnboundFlow(Protocol[Input, Output]):
+    def with_params(
+        self, params: Mapping[Any, Any] | Iterable[Any]
+    ) -> Transform[Input, Output]:
+        ...

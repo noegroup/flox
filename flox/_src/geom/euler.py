@@ -6,6 +6,13 @@ from typing import cast
 import jax.numpy as jnp
 from jaxtyping import Array, Float  # type: ignore
 
+__all__ = [
+    "rotmat2d",
+    "canonical_rotation",
+    "to_euler",
+    "from_euler",
+]
+
 Matrix2x2 = Float[Array, "2 2"]
 Matrix3x3 = Float[Array, "3 3"]
 EulerAngles = Float[Array, "3"]

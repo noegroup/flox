@@ -5,8 +5,20 @@ from typing import cast
 import jax.numpy as jnp
 from jaxtyping import Array, Float  # type: ignore
 
-from .geometry import inner
-from .jax_utils import Switch
+from flox._src.util.jax import Switch
+
+from .euclidean import inner
+
+__all__ = [
+    "to_quat",
+    "from_quat",
+    "qprod",
+    "qmat",
+    "qconj",
+    "qrot3d",
+    "quat_to_mat",
+    "mat_to_quat"
+]
 
 RotationMatrix = Float[Array, "3 3"]
 Matrix3x3 = Float[Array, "3 3"]

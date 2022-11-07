@@ -10,8 +10,11 @@ from jaxopt._src.base import OptStep
 from jaxopt._src.lbfgs import LBFGS
 from jaxtyping import Array, Bool, Float  # type: ignore
 
-from .func_utils import compose, pipe
-from .geometry import TangentSpaceMethod, inner, squared_norm, tangent_space, unit
+from flox._src.geom.euclidean import inner, squared_norm, unit
+from flox._src.geom.manifold import TangentSpaceMethod, tangent_space
+from flox._src.util.func import compose, pipe
+
+__all__ = []
 
 Scalar = Float[Array, ""]
 VectorN = Float[Array, "N"]
@@ -70,14 +73,18 @@ def potential_gradient(
 
 
 def differential(
-    fn: Callable[Concatenate[VectorN, P], Scalar], embedded: bool = False, **kwargs
+    fn: Callable[Concatenate[VectorN, P], Scalar],
+    embedded: bool = False,
+    **kwargs
 ) -> Callable[Concatenate[VectorN, P], Jacobian]:
     """Computes the differential of fn.
     If tangent space is provided computes it on the manifold.
     If tangent space is not provided computes it in the embedding space
     """
 
-    def eval(x: VectorN, *inner_args: P.args, **inner_kwargs: P.kwargs) -> Jacobian:
+    def eval(
+        x: VectorN, *inner_args: P.args, **inner_kwargs: P.kwargs
+    ) -> Jacobian:
         dF = jax.jacobian(fn, **kwargs)(x, *inner_args, **inner_kwargs)
         if embedded:
             y = fn(x, *inner_args, **inner_kwargs)
@@ -98,7 +105,9 @@ def numeric_inverse(
     @wraps(forward)
     def solve(init: VectorN, *args: P.args, **kwargs: P.kwargs) -> VectorN:
         def criterion(candidate: VectorN) -> Scalar:
-            return squared_norm(forward(unit(candidate), *args, **kwargs) - init)
+            return squared_norm(
+                forward(unit(candidate), *args, **kwargs) - init
+            )
 
         solver = solver_factory(criterion)
         step = solver.update(init, solver.init_state(init))
@@ -131,9 +140,9 @@ def forward_log_volume(
     transform: Callable[Concatenate[VectorN, P], VectorN]
 ) -> Callable[Concatenate[VectorN, P], Scalar]:
     def call(x: VectorN, *args: P.args, **kwargs: P.kwargs) -> Scalar:
-        return pipe(differential(pin(transform), embedded=True), det, jnp.abs, jnp.log)(
-            x, *args, **kwargs
-        )
+        return pipe(
+            differential(pin(transform), embedded=True), det, jnp.abs, jnp.log
+        )(x, *args, **kwargs)
 
     return call
 
@@ -171,7 +180,9 @@ def inverse_log_volume(
         #                J = original jacobian
         #               PJ = projected jacobian
         #       dx inv(PJ) = inv(PJ) (dx PJ) inv(PJ) pinv(J)
-        ddGx = -jnp.einsum("ij, jkl, km, ln -> imn", dFx_inv, ddFx, dFx_inv, Jx_pinv)
+        ddGx = -jnp.einsum(
+            "ij, jkl, km, ln -> imn", dFx_inv, ddFx, dFx_inv, Jx_pinv
+        )
 
         # differential wrt other args
         ddFargs = jax.jacobian(pin(dF), argnums=range(1, len(args) + 1))(

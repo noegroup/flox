@@ -8,8 +8,16 @@ import jax.numpy as jnp
 from jax_dataclasses import pytree_dataclass
 from jaxtyping import Array, Float  # type: ignore
 
-from .geometry import inner, norm, squared_norm, unit
-from .quaternion import mat_to_quat, qrot3d
+from flox._src.geom.euclidean import inner, norm, squared_norm, unit
+from flox._src.geom.quaternion import mat_to_quat, qrot3d
+
+__all__ = [
+    "to_euclidean",
+    "from_euclidean",
+    "to_euclidean_log_jacobian",
+    "from_euclidean_log_jacobian",
+    "Rigid",
+]
 
 Scalar = Float[Array, ""]
 Matrix3x3 = Float[Array, "3 3"]
@@ -52,7 +60,9 @@ def to_euclidean(
         r0, r1: edge lengths of the triangle
         a: inner angle of the triangle
     """
-    frame = jnp.array([[0, 0, 0], [0, 0, r0], [r1 * jnp.sin(a), 0, r1 * jnp.cos(a)]])
+    frame = jnp.array(
+        [[0, 0, 0], [0, 0, r0], [r1 * jnp.sin(a), 0, r1 * jnp.cos(a)]]
+    )
     return jax.vmap(partial(qrot3d, q))(cast(Array, frame)) + p[None]
 
 
@@ -83,7 +93,9 @@ def to_euclidean_log_jacobian(
 ) -> Scalar:
     r0sq = r0**2
     r1sq = r1**2
-    return jnp.log(8 * r0sq * r1sq * jnp.sin(a)) + 0.5 * jnp.log(4 * (r0sq + r1sq) + 1)
+    return jnp.log(8 * r0sq * r1sq * jnp.sin(a)) + 0.5 * jnp.log(
+        4 * (r0sq + r1sq) + 1
+    )
 
 
 def from_euclidean_log_jacobian(frame: Matrix3x3) -> Scalar:

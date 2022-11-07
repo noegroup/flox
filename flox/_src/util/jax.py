@@ -13,6 +13,8 @@ from jaxtyping import Bool, Integer  # pyright: reportPrivateImportUsage=false
 Condition = Bool[Array, "*dims"]
 BranchIndex = Integer[Array, "*dims"]
 
+__all__ = ["Switch", "key_chain", "FrozenMap"]
+
 
 def _select_branch(conds, branches) -> BranchIndex:
     """chains multiple jnp.where clauses and executes them in reverse order"""

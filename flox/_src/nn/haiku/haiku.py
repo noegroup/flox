@@ -1,32 +1,38 @@
 """ This module contains haiku modules / implementations. """
 
-from functools import partial
-from typing import Callable, Generic, Protocol, TypeVar
+from typing import Any, Generic, Protocol, TypeVar
 
 import haiku as hk
+import jax
 from jax_dataclasses import pytree_dataclass
 
-from flox.func_utils import pipe2
+from flox._src.flow.api import (
+    Input,
+    Inverted,
+    Lambda,
+    Output,
+    Pipe,
+    T,
+    Transform,
+    Transformed,
+    bind,
+    pure,
+)
 
-from .flow_api import Input, Output, T, Transformed, VolumeAccumulator
+__all__ = ["LayerStack", "to_haiku", "dense"]
 
 T = TypeVar("T")
 
 
-class FlowFactory(Protocol[Input, Output]):
-    def __call__(self) -> VolumeAccumulator[Input, Output]:
+class TransformFactory(Protocol[Input, Output]):
+    def __call__(self) -> Transform[Input, Output]:
         ...
 
 
-class VolumeAccumulatorFactory(Protocol[Input, Output]):
-    def __call__(self) -> VolumeAccumulator[Input, Output]:
-        ...
-
-
-class LayerStack(hk.Module, VolumeAccumulator[T, T]):
+class LayerStack(hk.Module, Transform[T, T]):
     def __init__(
         self,
-        factory: VolumeAccumulatorFactory[T, T],
+        factory: TransformFactory[T, T],
         num_layers=1,
         name="stacked",
     ):
@@ -42,9 +48,9 @@ class LayerStack(hk.Module, VolumeAccumulator[T, T]):
             new_out = None
 
             if inp is not None:
-                new_inp = trafo.forward(inp)
+                new_inp = bind(inp, trafo)
             if out is not None:
-                new_out = trafo.inverse(out)
+                new_out = bind(out, Inverted(trafo))
 
             return new_inp, new_out
 
@@ -64,71 +70,66 @@ class LayerStack(hk.Module, VolumeAccumulator[T, T]):
         reverse: bool = False,
     ) -> tuple[Transformed[T] | None, Transformed[T] | None]:
         init_rng = hk.next_rng_key() if hk.running_init() else None
-        params = hk.experimental.transparent_lift(self.stack.init, allow_reuse=True)(    # type: ignore
+        params = hk.experimental.transparent_lift(self.stack.init, allow_reuse=True)(  # type: ignore
             init_rng, inp, out, reverse=reverse
         )
         return self.stack.apply(params, inp, out, reverse=reverse)
 
-    def forward(self, input: Transformed[T]) -> Transformed[T]:
-        out, _ = self._apply(input, None, reverse=False)
+    def forward(self, input: T) -> Transformed[T]:
+        out, _ = self._apply(pure(input), None, reverse=False)
         assert out is not None
         return out
 
-    def inverse(self, input: Transformed[T]) -> Transformed[T]:
-        _, out = self._apply(None, input, reverse=True)
+    def inverse(self, input: T) -> Transformed[T]:
+        _, out = self._apply(None, pure(input), reverse=True)
         assert out is not None
         return out
 
 
 def dense(units, activation, name="dense"):
-    """ utility function that returns a simple densenet made from
+    """utility function that returns a simple densenet made from
 
-        example:
-            dense(units=[128, 3], activation=jax.nn.silu)
+    example:
+        dense(units=[128, 3], activation=jax.nn.silu)
     """
     layers = []
     with hk.experimental.name_scope(name):  # type: ignore
         for idx, out in enumerate(units):
             layers.append(hk.Linear(out))
-            if idx < len(units) -1:
+            if idx < len(units) - 1:
                 layers.append(activation)
     return hk.Sequential(layers, name=name)
 
 
 @pytree_dataclass(frozen=True)
-class WrappedVolumeAccumulator(VolumeAccumulator[Input, Output]):
-    forward: Callable[[Transformed[Input]], Transformed[Output]]
-    inverse: Callable[[Transformed[Input]], Transformed[Output]]
-
-
-@pytree_dataclass(frozen=True)
-class MultiTransformedFlow(Generic[Input, Output]):
+class HaikuTransform(Generic[Input, Output]):
     pure: hk.MultiTransformed
 
-    def with_params(self, params: dict) -> VolumeAccumulator[Input, Output]:
+    def with_params(self, params: dict | Any) -> Transform[Input, Output]:
         forward, inverse = self.pure.apply
-        return WrappedVolumeAccumulator[Input, Output](
-            partial(forward, params),
-            partial(inverse, params),
+        return Lambda[Input, Output](
+            jax.tree_util.Partial(forward, params),
+            jax.tree_util.Partial(inverse, params),
         )
 
 
-def transform_flow(factory: FlowFactory[Input, Output]) -> MultiTransformedFlow[Input, Output]:
-
+def to_haiku(
+    factory: TransformFactory[Input, Output]
+) -> HaikuTransform[Input, Output]:
     def transformed():
         flow = factory()
 
-        def init(input: Transformed[Input]) -> Transformed[Input]:
-            return pipe2(flow.forward, flow.inverse)(input)
-        
-        def forward(input: Transformed[Input]) -> Transformed[Output]:
+        def init(input: Input) -> Transformed[Input]:
+            return Pipe([flow, Inverted(flow)]).forward(input)
+
+        def forward(input: Input) -> Transformed[Output]:
             return flow.forward(input)
 
-        def inverse(input: Transformed[Output]) -> Transformed[Input]:
+        def inverse(input: Output) -> Transformed[Input]:
             return flow.inverse(input)
 
         return init, (forward, inverse)
 
     pure = hk.without_apply_rng(hk.multi_transform(transformed))
 
-    return MultiTransformedFlow[Input, Output](pure)
+    return HaikuTransform[Input, Output](pure)

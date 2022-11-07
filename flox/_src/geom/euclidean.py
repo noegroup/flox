@@ -7,6 +7,16 @@ import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Float  # type: ignore
 
+__all__ = [
+    "proj",
+    "gram_schmidt",
+    "outer",
+    "inner",
+    "norm",
+    "squared_norm",
+    "unit",
+]
+
 Scalar = Float[Array, ""]
 VectorN = Float[Array, "N"]
 
@@ -64,29 +74,3 @@ def squared_norm(x: VectorN, eps: float = 1e-12) -> Scalar:
 def unit(x: VectorN) -> VectorN:
     """normalizes a vector and turns it into a unit vector"""
     return x * jax.lax.rsqrt(squared_norm(x))
-    # return x / norm(x)
-
-
-class TangentSpaceMethod(Enum):
-    GramSchmidt = 0
-    SVD = 1
-
-
-def tangent_space(
-    p: VectorN, method: TangentSpaceMethod = TangentSpaceMethod.GramSchmidt
-) -> Float[Array, "N-1 N"]:
-    """computes tangent space of a point"""
-    tangent_space = None
-    match (method):
-        case TangentSpaceMethod.SVD:
-            *_, V = jnp.linalg.svd(jnp.outer(p, p))
-            tangent_space = V[1:]
-        case TangentSpaceMethod.GramSchmidt:
-            dim = len(p)
-            vs = jnp.eye(dim)
-            idx = jnp.argsort(vs @ p)
-            vs = jnp.concatenate([p[None], vs[idx[:-1]]])
-            tangent_space = gram_schmidt(cast(Array, vs))[1:]
-        case _:
-            raise ValueError(f"Unknown tangent space method {method}.")
-    return tangent_space

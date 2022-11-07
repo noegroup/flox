@@ -7,16 +7,9 @@ import jax.numpy as jnp
 from jax_dataclasses import pytree_dataclass
 from jaxtyping import Array, Float  # type: ignore
 
-import flox.rigid as rigid
-
-from .convex import (
-    forward_log_volume,
-    inverse_log_volume,
-    numeric_inverse,
-    potential_gradient,
-)
-from .flow_api import Transformed, Volume
-from .moebius import (
+import flox._src.flow.rigid as rigid
+from flox._src.flow.api import Transformed, Volume
+from flox._src.flow.moebius import (
     double_moebius_inverse,
     double_moebius_inverse_volume_change,
     double_moebius_project,
@@ -24,6 +17,22 @@ from .moebius import (
     moebius_project,
     moebius_volume_change,
 )
+
+from .convex import (
+    forward_log_volume,
+    inverse_log_volume,
+    numeric_inverse,
+    potential_gradient,
+)
+
+__all__ = [
+    "Affine",
+    "Moebius",
+    "DoubleMoebius",
+    "ConvexPotential",
+    "Rigid",
+    "DistraxWrapper",
+]
 
 VectorN = Float[Array, "N"]
 VectorM = Float[Array, "M"]
@@ -74,13 +83,17 @@ class Moebius:
         return Transformed(*moebius_forward(input, self.reflection))
 
 
-def double_moebius_forward_transform(p: VectorN, q: VectorN) -> tuple[VectorN, Volume]:
+def double_moebius_forward_transform(
+    p: VectorN, q: VectorN
+) -> tuple[VectorN, Volume]:
     p_ = double_moebius_project(p, q)
     vol = double_moebius_volume_change(p, q)
     return p_, jnp.log(vol)
 
 
-def double_moebius_inverse_transform(p: VectorN, q: VectorN) -> tuple[VectorN, Volume]:
+def double_moebius_inverse_transform(
+    p: VectorN, q: VectorN
+) -> tuple[VectorN, Volume]:
     p_ = double_moebius_inverse(p, q)
     vol = double_moebius_inverse_volume_change(p, q)
     return p_, jnp.log(vol)
@@ -91,10 +104,14 @@ class DoubleMoebius:
     reflection: VectorN
 
     def forward(self, input: VectorN) -> Transformed[VectorN]:
-        return Transformed(*double_moebius_forward_transform(input, self.reflection))
+        return Transformed(
+            *double_moebius_forward_transform(input, self.reflection)
+        )
 
     def inverse(self, input: VectorN) -> Transformed[VectorN]:
-        return Transformed(*double_moebius_inverse_transform(input, self.reflection))
+        return Transformed(
+            *double_moebius_inverse_transform(input, self.reflection)
+        )
 
 
 @pytree_dataclass(frozen=True)
@@ -104,7 +121,9 @@ class ConvexPotential:
     bias: VectorM
 
     def forward(self, input: VectorN) -> Transformed[VectorN]:
-        output = potential_gradient(input, self.ctrlpts, self.weights, self.bias)
+        output = potential_gradient(
+            input, self.ctrlpts, self.weights, self.bias
+        )
         logprob = forward_log_volume(potential_gradient)(
             input, self.ctrlpts, self.weights, self.bias
         )

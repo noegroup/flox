@@ -5,10 +5,14 @@ from typing import cast
 import jax.numpy as jnp
 from jaxtyping import Array, Float  # type: ignore
 
-from .geometry import inner, norm, proj
+from flox._src.geom.euclidean import inner, norm, proj
+
+__all__ = []
 
 
-def moebius_project(p: Float[Array, "N"], q: Float[Array, "N"]) -> Float[Array, "N"]:
+def moebius_project(
+    p: Float[Array, "N"], q: Float[Array, "N"]
+) -> Float[Array, "N"]:
     """projects p along q back onto the hypersphere
     this is a n-dimensional moebius transform
     """
@@ -36,12 +40,16 @@ def invert_on_great_circle(
 
     sign = cast(jnp.ndarray, jnp.asarray([-1.0, 1.0]))
     numer = (sign * r2 - 1.0) * p
-    denom = jnp.sqrt(jnp.clip(eps, (r2 + sign) ** 2 - 4.0 * sign * (r * p) ** 2))
+    denom = jnp.sqrt(
+        jnp.clip(eps, (r2 + sign) ** 2 - 4.0 * sign * (r * p) ** 2)
+    )
 
     x_, y_ = numer / (denom + eps)
 
     y_ = jnp.where(
-        r > threshold, -jnp.sign(y) * jnp.sqrt(jnp.clip(1.0 - x_**2, eps, 1.0)), y_
+        r > threshold,
+        -jnp.sign(y) * jnp.sqrt(jnp.clip(1.0 - x_**2, eps, 1.0)),
+        y_,
     )  # pim's numerical stability modification
 
     return cast(Array, jnp.stack([x_, y_]))

@@ -125,3 +125,26 @@ def mle_step(
         )
 
     return jitted_step
+
+
+def free_energy_step(
+    target: Potential[Output],
+    flow: UnboundFlow[Input, Output],
+    optim: GradientTransformation,
+    base: Sampler[Input],
+    num_samples: int,
+):
+
+    criterion = FreeEnergyLoss(target, flow, base)
+
+    @jax.jit
+    def jitted_step(
+        key: jax.random.PRNGKeyArray,
+        params: Params,
+        opt_state: OptState,
+    ) -> tuple[Scalar, OptState, Params]:
+        return update_step(
+            key, num_samples, params, opt_state, optim, criterion
+        )
+
+    return jitted_step

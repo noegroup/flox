@@ -15,12 +15,14 @@ MatrixNN = Float[Array, "N N"]
 
 PairPotential = Callable[[P, P], Scalar]
 
+__all__ = ["pairwise_penalty", "soft_edge", "lennard_jones_edge"]
+
 
 def soft_edge(d, dmin):
     return jnp.square(jax.nn.relu((dmin - d) / (dmin)))
 
 
-def lj_edge(d, sigma, soften=0.0, min_threshold=1e-5):
+def lennard_jones_edge(d, sigma, soften=0.0, min_threshold=1e-5):
     d = jnp.where(d < min_threshold, 1, d + soften)
     rec = sigma / d
     return 4 * (rec**12 - rec**6)

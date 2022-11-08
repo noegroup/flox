@@ -6,7 +6,7 @@ setup(
     url="https://github.com/noegroup/flox.git",
     author="Jonas Köhler",
     author_email="jonas.koehler.ks@gmail.com",
-    description="flox - flows in jax - sampling focused normalizing flow lib",
+    description="flox - flows in jax - sampling focused normalizing flow",
     packages=find_packages(),
     install_requires=[
         "jax >= 0.3.24",
@@ -15,7 +15,7 @@ setup(
         "jaxopt >= 0.5.5",
         "jaxtyping >= 0.2.7",
         "optax >= 0.1.3",
-        "python-lenses >= 1.1.0",
+        "lenses >= 1.1.0",
         "numpyro >= 0.10.1",
         "dm-haiku >= 0.0.8",
         "distrax >= 0.1.2",

@@ -27,6 +27,7 @@ __all__ = [
     "MaximumLikelihoodLoss",
     "FreeEnergyLoss",
     "mle_step",
+    "free_energy_step",
 ]
 
 

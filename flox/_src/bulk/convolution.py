@@ -1,34 +1,132 @@
 """ equivariant convolution for particle densities """
 
 import math
-from functools import lru_cache
+from functools import lru_cache, partial
 from typing import cast
 
 import jax
 import jax.numpy as jnp
 import numpy as np
-from jaxtyping import Array, Float
+from jaxtyping import Array, Float  # type: ignore
 
-from flox._src.bulk.lattice import neighbors  # type: ignore
+from flox._src.bulk.lattice import (
+    lattice_indices,
+    lattice_weights,
+    neighbors,
+    scatter,
+)
+
+__all__ = [
+    "grid",
+    "indices_and_weights",
+    "density",
+    "gradient",
+    "density_features",
+    "conv_nd",
+    "fft_conv",
+    "gauss_conv",
+]
 
 
-@lru_cache()
-def gradient_kernel(
-    num_dims,
-):
-    buffer = np.zeros((num_dims,) + (3,) * num_dims, dtype=np.float32)
+def grid(resolution: tuple[int, ...], bounds: tuple[tuple[float, float], ...]):
+    """returns grid for filter"""
+    xi = (
+        jnp.linspace(-min, max, r)
+        for ((min, max), r) in zip(bounds, resolution)
+    )
+    grid = jnp.meshgrid(*xi, indexing="ij")
+    return cast(Array, jnp.stack(grid, axis=-1))
+
+
+def indices_and_weights(pos, resolution):
+    idx = jax.vmap(lattice_indices, in_axes=(0, None, None))(
+        pos, neighbors(pos.shape[-1]), resolution
+    )
+    weights = jax.vmap(lattice_weights, in_axes=(0, 0, None))(
+        pos, idx, resolution
+    )
+    return idx, weights
+
+
+def density(idxs, weights, resolution):
+    num_particles = idxs.shape[0]
+    return scatter(jnp.ones((num_particles, 1)), weights, idxs, resolution)
+
+
+def gradient(idx, weights, resolution):
+    return discrete_gradient(density(idx, weights, resolution))
+
+
+def density_features(pos, res, idxs=None, weights=None, smoothen=None):
+    ndims = pos.shape[-1]
+    if idxs is None:
+        idxs = jax.vmap(
+            partial(
+                lattice_indices,
+                neighbors=neighbors(ndims),
+                resolution=res,
+            )
+        )(pos)
+    if weights is None:
+        weights = jax.vmap(partial(lattice_weights, resolution=res))(pos, idxs)
+    d = density(idxs, weights, res)
+    g = discrete_gradient(d)
+    out = jnp.concatenate([d, g], axis=-1)
+    if smoothen is not None:
+        out = gauss_conv(out, res, smoothen)
+    return out
+
+
+def gradient_kernel(num_dims):
+    buffer = np.zeros((3,) * num_dims + (num_dims,) + (1,))
     il = (slice(0, 1),) + (slice(1, 2),) * (num_dims - 1)
     ir = (slice(2, 3),) + (slice(1, 2),) * (num_dims - 1)
     for i in range(num_dims):
-        buffer[i][il] += 1
-        buffer[i][ir] += -1
+        buffer[il + (i,)] += -1
+        buffer[ir + (i,)] += 1
         il = (il[-1],) + il[:-1]
         ir = (ir[-1],) + ir[:-1]
-    return buffer[None]
+    return buffer
+
+
+def conv_nd(inp, kernel, batch_dim=False, periodic=True):
+    ndims = len(inp.shape) - 1 - batch_dim
+    dimstr = "".join(map(str, range(ndims)))
+
+    # add batch dimension
+    if not batch_dim:
+        inp = inp[None]
+
+    dimension_numbers = jax.lax.conv_dimension_numbers(
+        inp.shape,
+        kernel.shape,
+        (f"N{dimstr}C", f"{dimstr}OI", f"N{dimstr}C"),
+    )
+
+    if periodic:
+        batch_pad = ((0, 0),)
+        spatial_pad = tuple(((s - 1) // 2,) * 2 for s in kernel.shape[:-2])
+        channel_pad = ((0, 0),)
+        inp = jnp.pad(
+            inp, pad_width=batch_pad + spatial_pad + channel_pad, mode="wrap"
+        )
+    out = jax.lax.conv_general_dilated(
+        inp,
+        kernel,
+        window_strides=(1, 1),
+        padding="VALID",
+        lhs_dilation=None,
+        rhs_dilation=None,
+        dimension_numbers=dimension_numbers,
+    )
+
+    if not batch_dim:
+        out = out[0]
+    return out
 
 
 def discrete_gradient(
-    signal: jnp.ndarray,
+    signal: jnp.ndarray, batch_dim: bool = False, periodic: bool = True
 ):
     """discrete lattice gradient.
 
@@ -42,41 +140,12 @@ def discrete_gradient(
     jnp.ndarray [B, *D, D]
         lattice gradient of signal
     """
-    ndims = len(signal.shape) - 1
-    signal = signal[..., None]
+    ndims = len(signal.shape) - 1 - batch_dim
     kernel = -1.0 * gradient_kernel(ndims)
-    dimstr = "".join(map(str, range(ndims)))
-    dimension_numbers = jax.lax.conv_dimension_numbers(
-        signal.shape,
-        kernel.shape,
-        (f"N{dimstr}C", f"IO{dimstr}", f"N{dimstr}C"),
-    )
-    padded = jnp.pad(
-        signal,
-        pad_width=(((0, 0),) + ((1, 1),) * ndims + ((0, 0),)),
-        mode="wrap",
-    )
-    return jax.lax.conv_general_dilated(
-        padded,
-        kernel,
-        window_strides=(1, 1),
-        padding="VALID",
-        lhs_dilation=None,
-        rhs_dilation=None,
-        dimension_numbers=dimension_numbers,
-    )
+    return conv_nd(signal, kernel, batch_dim=batch_dim, periodic=periodic)
 
 
-def grid(resolution: tuple[int, ...]):
-    """returns grid for filter"""
-    xi = (jnp.linspace(-1, 1, r) for r in resolution)
-    grid = jnp.meshgrid(*xi, indexing="ij")
-    return cast(Array, jnp.stack(grid, axis=-1))
-
-
-def gauss_kernel(
-    resolution: tuple[int, ...], gain: float, spectral_kernel: bool = True
-) -> jnp.ndarray:
+def gauss_kernel(resolution: tuple[int, ...], gain: float) -> jnp.ndarray:
     """gaussian smoothing filter.
 
     Parameters:
@@ -91,58 +160,24 @@ def gauss_kernel(
     jnp.ndarray [*D]
         Gaussian kernel
     """
-    if not spectral_kernel:
-        gain = math.prod(resolution) / (0.5 * gain)
-    gauss = jnp.exp(
-        -0.5 * gain * jnp.sum(jnp.square(grid(resolution)), axis=-1)
-    )
+    g = grid(resolution, ((-1, 1),) * len(resolution))
+    gauss = jnp.exp(-0.5 * gain * jnp.sum(jnp.square(g), axis=-1))
     gauss = gauss.reshape(*resolution)
-    if spectral_kernel:
-        gauss = jnp.roll(
-            gauss,
-            shift=tuple(r // 2 for r in resolution),
-            axis=range(len(resolution)),
-        )
+    gauss = jnp.roll(
+        gauss,
+        shift=tuple(r // 2 for r in resolution),
+        axis=range(len(resolution)),
+    )
     gauss = gauss * jax.lax.rsqrt(jnp.square(gauss).sum() + 1e-12)
     return gauss
 
 
-def gauss_conv(
-    signal: jnp.ndarray,
-    resolution: tuple[int, ...],
-    gain: float,
-    spectral_kernel: bool = True,
-    conservative: bool = True,
-) -> jnp.ndarray:
-    """gaussian smoothing
-
-    Parameters:
-    -----------
-    signal: jnp.ndarray [*D, *F]
-        signal on a *D - lattice
-    resolution: tuple[int, ...]
-        resolution of the signal / lattice
-    gain: float
-        filter gain
-
-    Return:
-    -------
-    jnp.ndarray [*D, *F]
-        signal after smoothing
-    """
-    return spectral_convolve(
-        signal,
-        gauss_kernel(resolution, gain, spectral_kernel),
-        spectral_kernel=spectral_kernel,
-        conservative=conservative,
-    )
-
-
-def spectral_convolve(
+def fft_conv(
     inp: jnp.ndarray,
     kernel: jnp.ndarray,
-    spectral_kernel: bool = True,
-    conservative: bool = True,
+    ndims: int,
+    conserve_energy: bool = True,
+    pointwise: bool = False,
 ):
     """spectral convolution using the FFT.
 
@@ -158,40 +193,51 @@ def spectral_convolve(
     jnp.ndarray [*D, *F]
         signal after spectral convolution with filter
     """
-    ndims = len(kernel.shape)
-    axes = tuple(range(ndims))
-    spectrum = jnp.fft.fftn(inp, s=kernel.shape, axes=axes)
-    if not spectral_kernel:
-        kernel = jnp.abs(jnp.fft.fftn(kernel, axes=axes))
+    nin = len(inp.shape) - ndims
+    nout = len(kernel.shape) - ndims - nin
+    ntot = nin + nout
 
-    kslices = (slice(None),) * ndims + (None,) * (len(inp.shape) - ndims)
+    in_channels = inp.shape[-nin:]
+    out_channels = kernel.shape[-(nin + nout) : -nin]
+
+    assert kernel.shape[:-ntot] == inp.shape[:-nin]
+
+    axes = tuple(range(ndims))
+    spectrum = jnp.fft.fftn(inp, axes=axes)
+
+    reduction_axes = tuple(range(-nin, 0))
+    islices = (slice(None),) * ndims + (None,) * nout + (slice(None),) * nin
+    if pointwise:
+        convolved = jnp.squeeze((spectrum[islices] * kernel), axis=-2)
+    else:
+        convolved = (spectrum[islices] * kernel).sum(axis=reduction_axes)
     out = jnp.fft.ifftn(
-        spectrum * kernel[kslices],
-        s=inp.shape[:ndims],
+        convolved,
         axes=axes,
     )
-    out = cast(Array, out).real
+    out = cast(Array, out.real)
 
-    if conservative:
-        inp_norm = jnp.sqrt(1e-12 + jnp.square(inp).sum(axes, keepdims=True))
-        out_norm = jax.lax.rsqrt(
-            1e-12 + jnp.square(out).sum(axes, keepdims=True)
-        )
+    if conserve_energy:
+        inp_norm = jnp.sqrt(1e-12 + jnp.square(inp).sum(keepdims=True))
+        out_norm = jax.lax.rsqrt(1e-12 + jnp.square(out).sum(keepdims=True))
         out = out * out_norm * inp_norm
-
     return out
+
+
+def gauss_conv(inp, res, gain, conserve_energy: bool = True):
+    return fft_conv(
+        inp,
+        kernel=gauss_kernel(res, gain)[..., None, None],
+        ndims=len(res),
+        conserve_energy=conserve_energy,
+        pointwise=True,
+    )
 
 
 def convolution_edges(dim):
     edges = neighbors(dim)
     edges = edges / jnp.sqrt(1e-12 + jnp.square(edges).sum(-1, keepdims=True))
     return edges
-
-
-# def lattice_gauge_conv(
-#     signal: jnp.ndarray,
-#     idxs: jnp.ndarray,
-# ):
 
 
 def gauge_conv(
@@ -233,9 +279,9 @@ def gauge_conv(
     else:
         idxs = jnp.argsort(inner, axis=0)
     if order:
-        n, f, d = jnp.ogrid[map(slice, other.shape)]
+        n, f, d = jnp.ogrid[tuple(map(slice, other.shape))]
         other = other[idxs[n, f], f, d]
-        n, f = jnp.ogrid[map(slice, inner.shape)]
+        n, f = jnp.ogrid[tuple(map(slice, inner.shape))]
         inner = inner[idxs, f]
     inner = (inner + 1) / 9
     return jnp.einsum("nf, nfd, nfg -> gd", inner, other, kernel)

@@ -40,10 +40,13 @@ class Criterion(Protocol):
 class RunningMean:
     value: float
     count: int
+    discount: float = 1.0
 
     def update(self, new) -> "RunningMean":
+
         return RunningMean(
-            (self.value * self.count + new) / (self.count + 1),
+            (self.value * self.count * self.discount + new)
+            / (self.count * self.discount + 1),
             self.count + 1,
         )
 
@@ -188,8 +191,13 @@ def var_grad_step(
         opt_state: OptState,
     ) -> tuple[Scalar, OptState, Params]:
         return update_step(
-            key, num_samples, params, opt_state, optim, criterion,
-            aggregation=jnp.var
+            key,
+            num_samples,
+            params,
+            opt_state,
+            optim,
+            criterion,
+            aggregation=jnp.var,
         )
 
     return jitted_step

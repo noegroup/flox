@@ -1,6 +1,6 @@
 """ Everything related to training - this is still heavy WIP! """
 
-from typing import Callable, Generic, Protocol, TypeVar
+from typing import Any, Callable, Generic, Protocol, TypeVar
 
 import jax
 import jax.numpy as jnp
@@ -11,13 +11,13 @@ from optax import OptState
 from optax._src.base import GradientTransformation, Params
 
 from flox._src.flow.api import UnboundFlow
+from flox._src.flow.potential import Potential, PullbackPotential
 from flox._src.flow.sampling import PullbackSampler, PushforwardSampler, Sampler
 
 T = TypeVar("T")
 S = TypeVar("S")
 
 Scalar = Float[Array, ""] | float
-Potential = Callable[[T], Scalar]
 
 
 __all__ = [
@@ -55,9 +55,10 @@ def update_step(
     opt_state: OptState,
     optim: GradientTransformation,
     criterion: Criterion,
+    aggregation: Callable[[Any], Scalar] = jnp.mean,
 ) -> tuple[Scalar, Params, OptState]:
     def batch_criterion(key: jax.random.PRNGKeyArray, params: Params) -> Scalar:
-        return jnp.mean(
+        return aggregation(
             jax.vmap(lambda key: criterion(key, params))(
                 jax.random.split(key, num_samples)
             )
@@ -90,22 +91,19 @@ class MaximumLikelihoodLoss(Generic[Input, Output]):
 @pytree_dataclass(frozen=True)
 class VarGradLoss(Generic[Input, Output]):
 
-    base_sampler: Sampler[Input]
-    base_potential: Potential[Input]
+    sampler: Sampler[Output]
+    base: Potential[Input]
     flow: UnboundFlow[Input, Output]
-    target: Sampler[Output]
+    target: Potential[Output]
 
     def __call__(self, key: jax.random.PRNGKeyArray, params: Params) -> Scalar:
-        sample = PushforwardSampler(
-            self.base_sampler, self.flow.with_params(params)
-        )(key)
-        sample = jax.lax.stop_gradient(sample)
+        inp = jax.lax.stop_gradient(self.sampler(key)).obj
 
-        latent = self.flow.with_params(params).inverse(sample.obj)
-        model_energy = self.base_potential(latent.obj) - latent.ldj
-        target_energy = self.target(sample)
-
-        return 0.5 * jnp.var(target_energy - model_energy)
+        u_model = PullbackPotential(self.base, self.flow.with_params(params))(
+            inp
+        )
+        u_target = self.target(inp)
+        return u_target - u_model
 
 
 @pytree_dataclass(frozen=True)
@@ -167,6 +165,31 @@ def free_energy_step(
     ) -> tuple[Scalar, OptState, Params]:
         return update_step(
             key, num_samples, params, opt_state, optim, criterion
+        )
+
+    return jitted_step
+
+
+def var_grad_step(
+    sampler: Sampler[Output],
+    base: Potential[Input],
+    flow: UnboundFlow[Input, Output],
+    target: Potential[Output],
+    optim: GradientTransformation,
+    num_samples: int,
+):
+
+    criterion = VarGradLoss(sampler, base, flow, target)
+
+    @jax.jit
+    def jitted_step(
+        key: jax.random.PRNGKeyArray,
+        params: Params,
+        opt_state: OptState,
+    ) -> tuple[Scalar, OptState, Params]:
+        return update_step(
+            key, num_samples, params, opt_state, optim, criterion,
+            aggregation=jnp.var
         )
 
     return jitted_step

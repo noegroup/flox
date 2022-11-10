@@ -88,6 +88,27 @@ class MaximumLikelihoodLoss(Generic[Input, Output]):
 
 
 @pytree_dataclass(frozen=True)
+class VarGradLoss(Generic[Input, Output]):
+
+    base_sampler: Sampler[Input]
+    base_potential: Potential[Input]
+    flow: UnboundFlow[Input, Output]
+    target: Sampler[Output]
+
+    def __call__(self, key: jax.random.PRNGKeyArray, params: Params) -> Scalar:
+        sample = PushforwardSampler(
+            self.base_sampler, self.flow.with_params(params)
+        )(key)
+        sample = jax.lax.stop_gradient(sample)
+
+        latent = self.flow.with_params(params).inverse(sample.obj)
+        model_energy = self.base_potential(latent.obj) - latent.ldj
+        target_energy = self.target(sample)
+
+        return 0.5 * jnp.var(target_energy - model_energy)
+
+
+@pytree_dataclass(frozen=True)
 class FreeEnergyLoss(Generic[Input, Output]):
 
     target: Potential[Output]

@@ -92,11 +92,11 @@ S = TypeVar("S")
 P = ParamSpec("P")
 
 Fn = Callable[[T], S]
-Op = Callable[Concatenate[Fn[T, S], P], Fn[T, S]]
+Op = Callable[Concatenate[Fn, P], Fn]
 
 
 def op_repeat(
-    op: Op[T, S], nreps: int = 1, /, *args: P.args, **kwargs: P.kwargs
+    op: Op[Fn[T, S]], nreps: int = 1, /, *args: P.args, **kwargs: P.kwargs
 ) -> Fn:
     @wraps(op)
     def wrapper(fn: Fn[T, S]) -> Fn[T, S]:

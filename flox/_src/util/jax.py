@@ -96,10 +96,10 @@ Op = Callable[Concatenate[Fn, P], Fn]
 
 
 def op_repeat(
-    op: Op[Fn[T, S]], nreps: int = 1, /, *args: P.args, **kwargs: P.kwargs
+    op: Op, nreps: int = 1, /, *args: P.args, **kwargs: P.kwargs
 ) -> Fn:
     @wraps(op)
-    def wrapper(fn: Fn[T, S]) -> Fn[T, S]:
+    def wrapper(fn: Fn) -> Fn:
         for _ in range(nreps):
             fn = op(fn, *args, **kwargs)
         return fn

@@ -2,18 +2,21 @@
 
 from collections import ChainMap
 from collections.abc import Callable, Generator
-from typing import Any
+from functools import wraps
+from typing import Any, Concatenate, ParamSpec, TypeVar
 
 import jax
 import jax.numpy as jnp
 from jax import Array
-from jax_dataclasses import pytree_dataclass  # pyright: reportGeneralTypeIssues=false
+from jax_dataclasses import (
+    pytree_dataclass,
+)  # pyright: reportGeneralTypeIssues=false
 from jaxtyping import Bool, Integer  # pyright: reportPrivateImportUsage=false
 
 Condition = Bool[Array, "*dims"]
 BranchIndex = Integer[Array, "*dims"]
 
-__all__ = ["Switch", "key_chain", "FrozenMap"]
+__all__ = ["Switch", "key_chain", "FrozenMap", "op_repeat"]
 
 
 def _select_branch(conds, branches) -> BranchIndex:
@@ -39,7 +42,9 @@ class Switch:
         self.has_default = True
         return self.add_branch(jnp.array(True))
 
-    def add_branch(self, condition: Condition) -> Callable[[Callable], Callable]:
+    def add_branch(
+        self, condition: Condition
+    ) -> Callable[[Callable], Callable]:
         def decorator(branch):
             self.conditions.append(condition)
             self.branches.append(branch)
@@ -73,8 +78,30 @@ def key_chain(
 class FrozenMap(dict[str, Any]):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        object.__setattr__(self, "__dict__", dict(ChainMap(self.__dict__, kwargs)))
+        object.__setattr__(
+            self, "__dict__", dict(ChainMap(self.__dict__, kwargs))
+        )
 
     def __repr__(self):
         inner = ", ".join(f"{key}={value}" for (key, value) in self.items())
         return f"FrozenMap({inner})"
+
+
+T = TypeVar("T")
+S = TypeVar("S")
+P = ParamSpec("P")
+
+Fn = Callable[[T], S]
+Op = Callable[Concatenate[Fn[T, S], P], Fn[T, S]]
+
+
+def op_repeat(
+    op: Op[T, S], nreps: int = 1, /, *args: P.args, **kwargs: P.kwargs
+) -> Fn:
+    @wraps(op)
+    def wrapper(fn: Fn[T, S]) -> Fn[T, S]:
+        for _ in range(nreps):
+            fn = op(fn, *args, **kwargs)
+        return fn
+
+    return wrapper

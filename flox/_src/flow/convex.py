@@ -1,8 +1,16 @@
 """ Implementation of convex potential flows on spheres. """
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from functools import partial, wraps
-from typing import Any, Concatenate, Mapping, ParamSpec, Protocol, TypeVar, cast
+from typing import (
+    Any,
+    Concatenate,
+    ParamSpec,
+    Protocol,
+    TypeVar,
+    cast,
+    runtime_checkable,
+)
 
 import jax
 import jax.numpy as jnp
@@ -26,6 +34,7 @@ Jacobian = MatrixNxN | Float[Array, "N-1 N-1"]
 Criterion = Callable[[VectorN], Scalar]
 
 
+@runtime_checkable
 class Solver(Protocol):
     def init_state(self, init_params, *args, **kwargs) -> Any:
         ...

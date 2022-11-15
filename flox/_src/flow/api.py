@@ -1,18 +1,7 @@
 """ This module contains the general api for constructing flows. """
 
-from collections.abc import Reversible
-from typing import (
-    Any,
-    Callable,
-    Generic,
-    Iterable,
-    Mapping,
-    Protocol,
-    Sequence,
-    TypeVar,
-    cast,
-    runtime_checkable,
-)
+from collections.abc import Callable, Iterable, Mapping, Reversible, Sequence
+from typing import Any, Generic, Protocol, TypeVar, cast, runtime_checkable
 
 import jax
 import jax.numpy as jnp
@@ -174,6 +163,7 @@ class Inverted(Transform[Output, Input]):
         return self.inverted.forward(input)
 
 
+@runtime_checkable
 class UnboundFlow(Protocol[Input, Output]):
     def with_params(
         self, params: Mapping[Any, Any] | Iterable[Any]
@@ -195,9 +185,7 @@ class VectorizedTransform(Transform[Input, Output]):
             in_axes=self.in_axes,
         )(inp)
         if self.ldj_reduction is not None:
-            out: Transformed[Output] = lenses.bind(out).ldj.modify(
-                self.ldj_reduction
-            )
+            out = lenses.bind(out).ldj.modify(self.ldj_reduction)
         return Transformed(out.obj, out.ldj)
 
     def inverse(self, inp: Output) -> Transformed[Input]:
@@ -206,7 +194,5 @@ class VectorizedTransform(Transform[Input, Output]):
             in_axes=self.in_axes,
         )(inp)
         if self.ldj_reduction is not None:
-            out: Transformed[Input] = lenses.bind(out).ldj.modify(
-                self.ldj_reduction
-            )
+            out = lenses.bind(out).ldj.modify(self.ldj_reduction)
         return Transformed(out.obj, out.ldj)

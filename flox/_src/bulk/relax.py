@@ -1,5 +1,6 @@
+from collections.abc import Callable
 from functools import partial
-from typing import Any, Callable, Protocol
+from typing import Any, Protocol, runtime_checkable
 
 import jax
 import jax.numpy as jnp
@@ -15,6 +16,7 @@ Displacement = Float[Array, "N"]
 Criterion = Callable[[State], Scalar]
 
 
+@runtime_checkable
 class Solver(Protocol):
     def init_state(self, init_params, *args, **kwargs) -> Any:
         ...

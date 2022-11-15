@@ -1,9 +1,9 @@
 from typing import Generic, Protocol, TypeVar, runtime_checkable
 
 from jax_dataclasses import pytree_dataclass
-from jaxtyping import Array, Float
+from jaxtyping import Array, Float  # type: ignore
 
-from flox._src.flow.api import Transform, bind  # type: ignore
+from flox._src.flow.api import Transform
 
 __all__ = ["Potential", "PullbackPotential", "PushforwardPotential"]
 

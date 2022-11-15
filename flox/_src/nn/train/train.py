@@ -1,14 +1,14 @@
 """ Everything related to training - this is still heavy WIP! """
 
-from typing import Any, Callable, Generic, Protocol, TypeVar
+from collections.abc import Callable
+from typing import Any, Generic, Protocol, TypeVar, runtime_checkable
 
 import jax
 import jax.numpy as jnp
 import optax
 from jax_dataclasses import pytree_dataclass
 from jaxtyping import Array, Float  # type: ignore
-from optax import OptState
-from optax._src.base import GradientTransformation, Params
+from optax._src.base import GradientTransformation
 
 from flox._src.flow.api import UnboundFlow
 from flox._src.flow.potential import Potential, PullbackPotential
@@ -19,6 +19,7 @@ S = TypeVar("S")
 
 Scalar = Float[Array, ""] | float
 
+KeyArray = jax.Array | jax.random.PRNGKeyArray
 
 __all__ = [
     "Criterion",
@@ -31,8 +32,9 @@ __all__ = [
 ]
 
 
+@runtime_checkable
 class Criterion(Protocol):
-    def __call__(self, key: jax.random.PRNGKeyArray, params: Params) -> Scalar:
+    def __call__(self, key: KeyArray, params: Any) -> Scalar:
         ...
 
 
@@ -52,15 +54,15 @@ class RunningMean:
 
 
 def update_step(
-    key: jax.random.PRNGKeyArray,
+    key: KeyArray,
     num_samples: int,
-    params: Params,
-    opt_state: OptState,
+    params: Any,
+    opt_state: Any,
     optim: GradientTransformation,
     criterion: Criterion,
     aggregation: Callable[[Any], Scalar] = jnp.mean,
-) -> tuple[Scalar, Params, OptState]:
-    def batch_criterion(key: jax.random.PRNGKeyArray, params: Params) -> Scalar:
+) -> tuple[Scalar, Any, Any]:
+    def batch_criterion(key: KeyArray, params: Any) -> Scalar:
         return aggregation(
             jax.vmap(lambda key: criterion(key, params))(
                 jax.random.split(key, num_samples)
@@ -84,7 +86,7 @@ class MaximumLikelihoodLoss(Generic[Input, Output]):
     flow: UnboundFlow[Input, Output]
     target: Sampler[Output]
 
-    def __call__(self, key: jax.random.PRNGKeyArray, params: Params) -> Scalar:
+    def __call__(self, key: KeyArray, params: Any) -> Scalar:
         latent = PullbackSampler(self.target, self.flow.with_params(params))(
             key
         )
@@ -99,7 +101,7 @@ class VarGradLoss(Generic[Input, Output]):
     flow: UnboundFlow[Input, Output]
     target: Potential[Output]
 
-    def __call__(self, key: jax.random.PRNGKeyArray, params: Params) -> Scalar:
+    def __call__(self, key: KeyArray, params: Any) -> Scalar:
         inp = jax.lax.stop_gradient(self.sampler(key)).obj
 
         u_model = PullbackPotential(self.base, self.flow.with_params(params))(
@@ -116,7 +118,7 @@ class FreeEnergyLoss(Generic[Input, Output]):
     flow: UnboundFlow[Input, Output]
     base: Sampler[Input]
 
-    def __call__(self, key: jax.random.PRNGKeyArray, params: Params) -> Scalar:
+    def __call__(self, key: KeyArray, params: Any) -> Scalar:
         sample = PushforwardSampler(self.base, self.flow.with_params(params))(
             key
         )
@@ -139,10 +141,10 @@ def mle_step(
 
     @jax.jit
     def jitted_step(
-        key: jax.random.PRNGKeyArray,
-        params: Params,
-        opt_state: OptState,
-    ) -> tuple[Scalar, OptState, Params]:
+        key: KeyArray,
+        params: Any,
+        opt_state: Any,
+    ) -> tuple[Scalar, Any, Any]:
         return update_step(
             key, num_samples, params, opt_state, optim, criterion
         )
@@ -162,10 +164,10 @@ def free_energy_step(
 
     @jax.jit
     def jitted_step(
-        key: jax.random.PRNGKeyArray,
-        params: Params,
-        opt_state: OptState,
-    ) -> tuple[Scalar, OptState, Params]:
+        key: KeyArray,
+        params: Any,
+        opt_state: Any,
+    ) -> tuple[Scalar, Any, Any]:
         return update_step(
             key, num_samples, params, opt_state, optim, criterion
         )
@@ -186,10 +188,10 @@ def var_grad_step(
 
     @jax.jit
     def jitted_step(
-        key: jax.random.PRNGKeyArray,
-        params: Params,
-        opt_state: OptState,
-    ) -> tuple[Scalar, OptState, Params]:
+        key: KeyArray,
+        params: Any,
+        opt_state: Any,
+    ) -> tuple[Scalar, Any, Any]:
         return update_step(
             key,
             num_samples,
@@ -197,7 +199,7 @@ def var_grad_step(
             opt_state,
             optim,
             criterion,
-            aggregation=jnp.var,
+            jnp.var,
         )
 
     return jitted_step

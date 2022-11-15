@@ -1,11 +1,11 @@
 from enum import Enum
-from typing import NewType, Protocol, TypeVar, cast
+from typing import cast
 
 import jax.numpy as jnp
 from jax_dataclasses import pytree_dataclass
 from jaxtyping import Array, Float  # type: ignore
 
-from .euclidean import VectorN, gram_schmidt, norm, unit
+from .euclidean import gram_schmidt, norm, unit
 
 __all__ = [
     "Torus",

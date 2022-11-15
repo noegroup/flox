@@ -3,7 +3,7 @@
 from collections import ChainMap
 from collections.abc import Callable, Generator
 from functools import wraps
-from typing import Any, Concatenate, ParamSpec, TypeVar
+from typing import Any
 
 import jax
 import jax.numpy as jnp
@@ -15,6 +15,8 @@ from jaxtyping import Bool, Integer  # pyright: reportPrivateImportUsage=false
 
 Condition = Bool[Array, "*dims"]
 BranchIndex = Integer[Array, "*dims"]
+
+KeyArray = Array | jax.random.PRNGKeyArray
 
 __all__ = ["Switch", "key_chain", "FrozenMap", "op_repeat"]
 
@@ -62,7 +64,7 @@ class Switch:
 
 def key_chain(
     seed: int | jnp.ndarray | jax.random.PRNGKeyArray,
-) -> Generator[jax.random.PRNGKeyArray, None, None]:
+) -> Generator[KeyArray, None, None]:
     """returns an iterator that automatically splits jax.random.PRNGKeys"""
 
     if isinstance(seed, int) or seed.ndim == 0:
@@ -87,19 +89,15 @@ class FrozenMap(dict[str, Any]):
         return f"FrozenMap({inner})"
 
 
-T = TypeVar("T")
-S = TypeVar("S")
-P = ParamSpec("P")
-
-Fn = Callable[[T], S]
-Op = Callable[Concatenate[Fn, P], Fn]
-
-
 def op_repeat(
-    op: Op, nreps: int = 1, /, *args: P.args, **kwargs: P.kwargs
-) -> Fn:
+    op: Callable[..., Any],
+    nreps: int = 1,
+    /,
+    *args: Any,
+    **kwargs: Any,
+) -> Callable[[Any], Any]:
     @wraps(op)
-    def wrapper(fn: Fn) -> Fn:
+    def wrapper(fn: Callable[[Any], Any]) -> Callable[[Any], Any]:
         for _ in range(nreps):
             fn = op(fn, *args, **kwargs)
         return fn

@@ -182,18 +182,18 @@ class VectorizedTransform(Transform[Input, Output]):
 
     def forward(self, inp: Input) -> Transformed[Output]:
         out = jax.vmap(
-            self.transform.forward,
+            lambda t, x: t.forward(x),
             in_axes=self.in_axes,
-        )(inp)
+        )(self.transform, inp)
         if self.ldj_reduction is not None:
             out = lenses.bind(out).ldj.modify(self.ldj_reduction)
         return Transformed(out.obj, out.ldj)
 
     def inverse(self, inp: Output) -> Transformed[Input]:
         out = jax.vmap(
-            self.transform.inverse,
+            lambda t, x: t.forward(x),
             in_axes=self.in_axes,
-        )(inp)
+        )(self.transform, inp)
         if self.ldj_reduction is not None:
             out = lenses.bind(out).ldj.modify(self.ldj_reduction)
         return Transformed(out.obj, out.ldj)

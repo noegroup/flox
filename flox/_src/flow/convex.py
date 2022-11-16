@@ -61,8 +61,8 @@ def det(M: MatrixNxN) -> Scalar:
 def potential(
     input: VectorN,
     ctrlpts: Float[Array, "M N"],
-    weights: Float[Array, "M"],
-    bias: Float[Array, "M"],
+    weights: Float[Array, "M+1"],
+    bias: Float[Array, "M+1"],
     eps: float = 1e-6,
 ) -> Scalar:
     """Simple convex potential"""
@@ -75,8 +75,8 @@ def potential(
 def potential_gradient(
     input: VectorN,
     ctrlpts: Float[Array, "M N"],
-    weights: Float[Array, "M"],
-    bias: Float[Array, "M"],
+    weights: Float[Array, "M+1"],
+    bias: Float[Array, "M+1"],
 ) -> VectorN:
     return unit(jax.grad(potential)(input, ctrlpts, weights, bias))
 

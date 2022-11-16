@@ -1,6 +1,6 @@
 """ This module contains haiku modules / implementations. """
 
-from typing import Any, Generic, Protocol, TypeVar
+from typing import Any, Generic, Protocol, TypeVar, runtime_checkable
 
 import haiku as hk
 import jax
@@ -23,7 +23,7 @@ __all__ = ["LayerStack", "to_haiku", "dense"]
 
 T = TypeVar("T")
 
-
+@runtime_checkable
 class TransformFactory(Protocol[Input, Output]):
     def __call__(self) -> Transform[Input, Output]:
         ...

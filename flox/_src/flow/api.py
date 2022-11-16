@@ -38,6 +38,7 @@ __all__ = [
     "Pipe",
     "Lambda",
     "Inverted",
+    "VectorizedTransform",
 ]
 
 

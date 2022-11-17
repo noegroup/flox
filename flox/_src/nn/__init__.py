@@ -1,3 +1,3 @@
-from . import train
+from . import modules, train
 
-__all__ = ["train"]
+__all__ = ["train", "modules"]

@@ -7,8 +7,6 @@ from jaxtyping import Array, Float  # type: ignore
 
 from flox._src.util.jax import Switch
 
-from .euclidean import inner
-
 __all__ = [
     "to_quat",
     "from_quat",
@@ -17,7 +15,7 @@ __all__ = [
     "qconj",
     "qrot3d",
     "quat_to_mat",
-    "mat_to_quat"
+    "mat_to_quat",
 ]
 
 RotationMatrix = Float[Array, "3 3"]

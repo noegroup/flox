@@ -3,7 +3,7 @@
 from collections import ChainMap
 from collections.abc import Callable, Generator
 from functools import wraps
-from typing import Any
+from typing import Any, Concatenate, ParamSpec, TypeVar
 
 import jax
 import jax.numpy as jnp
@@ -89,15 +89,20 @@ class FrozenMap(dict[str, Any]):
         return f"FrozenMap({inner})"
 
 
+T = TypeVar("T")
+S = TypeVar("S")
+P = ParamSpec("P")
+
+
 def op_repeat(
-    op: Callable[..., Any],
+    op: Callable[Concatenate[Callable[[T], S], P], Any],
     nreps: int = 1,
     /,
-    *args: Any,
-    **kwargs: Any,
-) -> Callable[[Any], Any]:
+    *args: P.args,
+    **kwargs: P.kwargs,
+) -> Callable[[T], S]:
     @wraps(op)
-    def wrapper(fn: Callable[[Any], Any]) -> Callable[[Any], Any]:
+    def wrapper(fn: Callable[[T], S]) -> Callable[[T], S]:
         for _ in range(nreps):
             fn = op(fn, *args, **kwargs)
         return fn

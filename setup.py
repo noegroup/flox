@@ -10,14 +10,13 @@ setup(
     packages=find_packages(),
     install_requires=[
         "jax >= 0.3.24",
-        "jax-dataclasses >= 1.4.4",
         "jaxlib >= 0.3.24",
         "jaxopt >= 0.5.5",
         "jaxtyping >= 0.2.7",
         "optax >= 0.1.3",
         "lenses >= 1.1.0",
         "numpyro >= 0.10.1",
-        "dm-haiku >= 0.0.8",
+        "equinox",
         "distrax >= 0.1.2",
     ],
 )

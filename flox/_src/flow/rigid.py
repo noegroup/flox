@@ -3,6 +3,7 @@
 from functools import partial
 from typing import cast
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 from jax_dataclasses import pytree_dataclass
@@ -109,7 +110,7 @@ def from_euclidean_log_jacobian(frame: Matrix3x3) -> Scalar:
     )
 
 
-@pytree_dataclass
+@pytree_dataclass(frozen=True)
 class Rigid:
     rotation: Quaternion
     position: Vector3

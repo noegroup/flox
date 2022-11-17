@@ -1,9 +1,9 @@
 """ This module contains the general api for constructing flows. """
 
-from collections.abc import Callable, Iterable, Mapping, Reversible, Sequence
+from collections.abc import Callable, Reversible
 from typing import Any, Generic, Protocol, TypeVar, cast, runtime_checkable
 
-import jax
+import equinox as eqx
 import jax.numpy as jnp
 import lenses
 from jax_dataclasses import pytree_dataclass
@@ -132,7 +132,7 @@ class SimpleCoupling(Transform[A, A], Generic[A, C]):
 
 @pytree_dataclass(frozen=True)
 class Pipe(Generic[Input, Output]):
-    transforms: Reversible[Transform]
+    transforms: Reversible[Transform[Any, Any]]
 
     def forward(self, input: Input) -> Transformed[Output]:
         accum = pure(input)
@@ -142,7 +142,7 @@ class Pipe(Generic[Input, Output]):
 
     def inverse(self, input: Output) -> Transformed[Input]:
         accum = pure(input)
-        for t in map(Inverted, reversed(self.transforms)):
+        for t in map(Inverted[Any, Any], reversed(self.transforms)):
             accum = bind(accum, t)
         return cast(Transformed[Input], accum)
 
@@ -164,36 +164,21 @@ class Inverted(Transform[Output, Input]):
         return self.inverted.forward(input)
 
 
-@runtime_checkable
-class UnboundFlow(Protocol[Input, Output]):
-    def with_params(
-        self, params: Mapping[Any, Any] | Iterable[Any]
-    ) -> Transform[Input, Output]:
-        ...
-
-
-@pytree_dataclass
+@pytree_dataclass(frozen=True)
 class VectorizedTransform(Transform[Input, Output]):
     """vmap wrapper for transforms"""
 
     transform: Transform[Input, Output]
-    in_axes: int | Sequence[Any] = 0
     ldj_reduction: Callable[[Any], Volume] | None = jnp.sum
 
     def forward(self, inp: Input) -> Transformed[Output]:
-        out = jax.vmap(
-            lambda t, x: t.forward(x),
-            in_axes=self.in_axes,
-        )(self.transform, inp)
+        out = eqx.filter_vmap(type(self.transform).forward)(self.transform, inp)
         if self.ldj_reduction is not None:
             out = lenses.bind(out).ldj.modify(self.ldj_reduction)
         return Transformed(out.obj, out.ldj)
 
     def inverse(self, inp: Output) -> Transformed[Input]:
-        out = jax.vmap(
-            lambda t, x: t.forward(x),
-            in_axes=self.in_axes,
-        )(self.transform, inp)
+        out = eqx.filter_vmap(type(self.transform).inverse)(self.transform, inp)
         if self.ldj_reduction is not None:
             out = lenses.bind(out).ldj.modify(self.ldj_reduction)
         return Transformed(out.obj, out.ldj)

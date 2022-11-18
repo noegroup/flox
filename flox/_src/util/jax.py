@@ -18,7 +18,7 @@ BranchIndex = Integer[Array, "*dims"]
 
 KeyArray = Array | jax.random.PRNGKeyArray
 
-__all__ = ["Switch", "key_chain", "FrozenMap", "op_repeat"]
+__all__ = ["Switch", "key_chain", "FrozenMap"]
 
 
 def _select_branch(conds, branches) -> BranchIndex:

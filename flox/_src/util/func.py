@@ -59,10 +59,21 @@ class Lens(Generic[A, B, C, D]):
         return lifted
 
 
-def repeat(op, nreps=1, /, *args, **kwargs):
+T = TypeVar("T")
+S = TypeVar("S")
+P = ParamSpec("P")
+
+
+def repeat(
+    op: Callable[Concatenate[Callable[[T], S], P], Callable[[T], S]],
+    nreps: int = 1,
+    /,
+    *args: P.args,
+    **kwargs: P.kwargs,
+) -> Callable[[Callable[[T], S]], Callable[[T], S]]:
     @wraps(op)
-    def wrapper(fn):
-        for i in range(nreps):
+    def wrapper(fn: Callable[[T], S]) -> Callable[[T], S]:
+        for _ in range(nreps):
             fn = op(fn, *args, **kwargs)
         return fn
 

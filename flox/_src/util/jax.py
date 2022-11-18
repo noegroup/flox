@@ -87,24 +87,3 @@ class FrozenMap(dict[str, Any]):
     def __repr__(self):
         inner = ", ".join(f"{key}={value}" for (key, value) in self.items())
         return f"FrozenMap({inner})"
-
-
-T = TypeVar("T")
-S = TypeVar("S")
-P = ParamSpec("P")
-
-
-def op_repeat(
-    op: Callable[Concatenate[Callable[[T], S], P], Any],
-    nreps: int = 1,
-    /,
-    *args: P.args,
-    **kwargs: P.kwargs,
-) -> Callable[[T], S]:
-    @wraps(op)
-    def wrapper(fn: Callable[[T], S]) -> Callable[[T], S]:
-        for _ in range(nreps):
-            fn = op(fn, *args, **kwargs)
-        return fn
-
-    return wrapper

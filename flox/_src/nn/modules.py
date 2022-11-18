@@ -10,6 +10,8 @@ from flox._src.util.jax import key_chain
 
 KeyArray = jax.random.PRNGKeyArray | jnp.ndarray
 
+__all__ = ["gen_dense", "FlipInvariant", "BoxWrapped"]
+
 
 def gen_dense(
     units, activation, key: KeyArray

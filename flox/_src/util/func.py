@@ -1,9 +1,10 @@
 """ Functional utilities. """
 
 from collections.abc import Callable
-from dataclasses import dataclass
 from functools import reduce, wraps
 from typing import Any, Concatenate, Generic, ParamSpec, TypeVar, cast
+
+from jax_dataclasses import pytree_dataclass
 
 P = ParamSpec("P")
 A = TypeVar("A")
@@ -47,7 +48,7 @@ X = TypeVar("X")
 Y = TypeVar("Y")
 
 
-@dataclass(frozen=True)
+@pytree_dataclass(frozen=True)
 class Lens(Generic[A, B, C, D]):
     project: Callable[[A], C]
     inject: Callable[[A, D], B]

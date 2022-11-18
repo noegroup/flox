@@ -172,13 +172,13 @@ class VectorizedTransform(Transform[Input, Output]):
     ldj_reduction: Callable[[Any], Volume] | None = jnp.sum
 
     def forward(self, inp: Input) -> Transformed[Output]:
-        out = eqx.filter_vmap(lambda t, x: t.forward(x))(self.transform, inp)
+        out = eqx.filter_vmap(type(self.transform).forward)(self.transform, inp)
         if self.ldj_reduction is not None:
             out = lenses.bind(out).ldj.modify(self.ldj_reduction)
         return Transformed(out.obj, out.ldj)
 
     def inverse(self, inp: Output) -> Transformed[Input]:
-        out = eqx.filter_vmap(lambda t, x: t.inverse(x))(self.transform, inp)
+        out = eqx.filter_vmap(type(self.transform).inverse)(self.transform, inp)
         if self.ldj_reduction is not None:
             out = lenses.bind(out).ldj.modify(self.ldj_reduction)
         return Transformed(out.obj, out.ldj)

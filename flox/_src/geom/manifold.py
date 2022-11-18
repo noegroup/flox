@@ -1,7 +1,6 @@
 from enum import Enum
 from typing import cast
 
-import equinox as eqx
 import jax.numpy as jnp
 from jax_dataclasses import pytree_dataclass
 from jaxtyping import Array, Float  # type: ignore

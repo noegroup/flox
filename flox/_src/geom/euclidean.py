@@ -1,6 +1,5 @@
 """ Everything related to basic Euclidean geometry. """
 
-from enum import Enum
 from typing import cast
 
 import jax

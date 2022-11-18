@@ -3,7 +3,6 @@
 from functools import partial
 from typing import cast
 
-import equinox as eqx
 import jax
 import jax.numpy as jnp
 from jax_dataclasses import pytree_dataclass

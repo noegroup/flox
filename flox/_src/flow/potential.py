@@ -1,6 +1,5 @@
 from typing import Generic, Protocol, TypeVar, runtime_checkable
 
-import equinox as eqx
 from jax_dataclasses import pytree_dataclass
 from jaxtyping import Array, Float  # type: ignore
 

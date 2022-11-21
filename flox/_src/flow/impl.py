@@ -121,9 +121,6 @@ class ConvexPotential:
     bias: VectorM
 
     def forward(self, input: VectorN) -> Transformed[VectorN]:
-        print(
-            input.shape, self.ctrlpts.shape, self.weights.shape, self.bias.shape
-        )
         output = potential_gradient(
             input, self.ctrlpts, self.weights, self.bias
         )

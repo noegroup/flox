@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 from functools import reduce, wraps
-from typing import Any, Concatenate, Generic, ParamSpec, TypeVar, cast
+from typing import Any, Concatenate, Generic, ParamSpec, Protocol, TypeVar, cast
 
 from jax_dataclasses import pytree_dataclass
 

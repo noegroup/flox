@@ -1,7 +1,6 @@
 """ This module contains the general api for constructing flows. """
 
 from collections.abc import Callable, Reversible
-from dataclasses import astuple
 from functools import partial
 from typing import Any, Generic, Protocol, TypeVar, cast, runtime_checkable
 
@@ -13,7 +12,6 @@ from jax_dataclasses import pytree_dataclass
 from jaxtyping import Array, Float  # type: ignore
 
 from flox._src.util.func import Lens
-from flox._src.util.misc import unpack
 
 Volume = Float[Array, ""]
 
@@ -51,9 +49,6 @@ __all__ = [
 class Transformed(Generic[T]):
     obj: T
     ldj: Volume
-
-    def __iter__(self):
-        return unpack(self)
 
 
 @runtime_checkable
@@ -197,11 +192,14 @@ G = TypeVar("G")
 Op = Transform[T, T]
 
 
-def stack(f: Op[T]):
+def stack() -> jax.custom_vjp[Transformed[T]]:
+    def _apply_fwd_stack(
+        f: Op[T], x: T
+    ) -> tuple[Transformed[T], tuple[Op[T], Transformed[T]]]:
+        params, static = cast(
+            tuple[Op[T], Op[T]], eqx.partition(f, eqx.is_array)
+        )
 
-    params, static = cast(tuple[Op[T], Op[T]], eqx.partition(f, eqx.is_array))
-
-    def _apply_fwd_stack(x: T) -> tuple[Transformed[T], Transformed[T]]:
         def body(
             x: Transformed[T], params: Op[T]
         ) -> tuple[Transformed[T], None]:
@@ -214,9 +212,16 @@ def stack(f: Op[T]):
             xs=params,
         )
 
-        return y, y
+        return y, (f, y)
 
     def _apply_bwd_stack(res: tuple[Transformed[T], Op[T]], g: G) -> tuple[G]:
+
+        f, y = res
+
+        params, static = cast(
+            tuple[Op[T], Op[T]], eqx.partition(f, eqx.is_array)
+        )
+
         def body(
             carry: tuple[G, Transformed[T]], params: Op[T]
         ) -> tuple[tuple[G, Transformed[T]], None]:
@@ -233,11 +238,11 @@ def stack(f: Op[T]):
             body, init=(g, y), xs=Inverted(params), reverse=True
         )
 
-        return (g,)
+        return g  # type: ignore
 
     @jax.custom_vjp
-    def _apply_stack(x: T) -> Transformed[T]:
-        return _apply_fwd_stack(x)[0]
+    def _apply_stack(f: Op[T], x: T) -> Transformed[T]:
+        return _apply_fwd_stack(f, x)[0]
 
     _apply_stack.defvjp(_apply_fwd_stack, _apply_bwd_stack)
 
@@ -249,7 +254,7 @@ class Stack(eqx.Module, Generic[T]):
     stacked: Op[T]
 
     def forward(self, input: T) -> Transformed[T]:
-        return stack(self.stacked)(input)
+        return stack()(self.stacked, input)
 
     def inverse(self, input: T) -> Transformed[T]:
-        return stack(Inverted(self.stacked))(input)
+        return stack()(Inverted(self.stacked), input)

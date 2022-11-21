@@ -13,6 +13,7 @@ from jax_dataclasses import pytree_dataclass
 from jaxtyping import Array, Float  # type: ignore
 
 from flox._src.util.func import Lens
+from flox._src.util.misc import unpack
 
 Volume = Float[Array, ""]
 
@@ -50,6 +51,9 @@ __all__ = [
 class Transformed(Generic[T]):
     obj: T
     ldj: Volume
+
+    def __iter__(self):
+        return unpack(self)
 
 
 @runtime_checkable

@@ -1,9 +1,12 @@
 """ This module contains the general api for constructing flows. """
 
 from collections.abc import Callable, Reversible
+from dataclasses import astuple
+from functools import partial
 from typing import Any, Generic, Protocol, TypeVar, cast, runtime_checkable
 
 import equinox as eqx
+import jax
 import jax.numpy as jnp
 import lenses
 from jax_dataclasses import pytree_dataclass
@@ -39,6 +42,7 @@ __all__ = [
     "Lambda",
     "Inverted",
     "VectorizedTransform",
+    "Stack",
 ]
 
 
@@ -168,17 +172,80 @@ class Inverted(Transform[Output, Input]):
 class VectorizedTransform(Transform[Input, Output]):
     """vmap wrapper for transforms"""
 
-    transform: Transform[Input, Output]
+    vmapped: Transform[Input, Output]
     ldj_reduction: Callable[[Any], Volume] | None = jnp.sum
 
-    def forward(self, inp: Input) -> Transformed[Output]:
-        out = eqx.filter_vmap(type(self.transform).forward)(self.transform, inp)
+    def forward(self, input: Input) -> Transformed[Output]:
+        out = eqx.filter_vmap(type(self.vmapped).forward)(self.vmapped, input)
         if self.ldj_reduction is not None:
             out = lenses.bind(out).ldj.modify(self.ldj_reduction)
         return Transformed(out.obj, out.ldj)
 
-    def inverse(self, inp: Output) -> Transformed[Input]:
-        out = eqx.filter_vmap(type(self.transform).inverse)(self.transform, inp)
+    def inverse(self, input: Output) -> Transformed[Input]:
+        out = eqx.filter_vmap(type(self.vmapped).inverse)(self.vmapped, input)
         if self.ldj_reduction is not None:
             out = lenses.bind(out).ldj.modify(self.ldj_reduction)
         return Transformed(out.obj, out.ldj)
+
+
+T = TypeVar("T")
+G = TypeVar("G")
+Op = Transform[T, T]
+
+
+def stack(f: Op[T]):
+
+    params, static = cast(tuple[Op[T], Op[T]], eqx.partition(f, eqx.is_array))
+
+    def _apply_fwd_stack(x: T) -> tuple[Transformed[T], Transformed[T]]:
+        def body(
+            x: Transformed[T], params: Op[T]
+        ) -> tuple[Transformed[T], None]:
+            f = cast(Op[T], eqx.combine(params, static))
+            return bind(x, f), None
+
+        y, _ = jax.lax.scan(
+            body,
+            init=pure(x),
+            xs=params,
+        )
+
+        return y, y
+
+    def _apply_bwd_stack(res: tuple[Transformed[T], Op[T]], g: G) -> tuple[G]:
+        def body(
+            carry: tuple[G, Transformed[T]], params: Op[T]
+        ) -> tuple[tuple[G, Transformed[T]], None]:
+            f = cast(Op[T], eqx.combine(params, static))
+            g, y = carry
+            x = bind(y, f)
+            f_ = partial(bind, t=f)
+            g: G = jax.vjp(f_, x)[1](g)
+            return (g, x), None
+
+        y, f = res
+
+        (g, _), _ = jax.lax.scan(
+            body, init=(g, y), xs=Inverted(params), reverse=True
+        )
+
+        return (g,)
+
+    @jax.custom_vjp
+    def _apply_stack(x: T) -> Transformed[T]:
+        return _apply_fwd_stack(x)[0]
+
+    _apply_stack.defvjp(_apply_fwd_stack, _apply_bwd_stack)
+
+    return _apply_stack
+
+
+class Stack(eqx.Module, Generic[T]):
+
+    stacked: Op[T]
+
+    def forward(self, input: T) -> Transformed[T]:
+        return stack(self.stacked)(input)
+
+    def inverse(self, input: T) -> Transformed[T]:
+        return stack(Inverted(self.stacked))(input)

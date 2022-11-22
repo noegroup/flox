@@ -11,7 +11,7 @@ A = TypeVar("A")
 B = TypeVar("B")
 C = TypeVar("C")
 
-__all__ = ["compose2", "compose", "pipe2", "pipe", "Lens"]
+__all__ = ["compose2", "compose", "pipe2", "pipe", "Lens", "LensLike", "lift"]
 
 
 def compose2(f: Callable[[B], C], g: Callable[[A], B]) -> Callable[[A], C]:
@@ -49,15 +49,25 @@ Y = TypeVar("Y")
 
 
 @pytree_dataclass(frozen=True)
+class LensLike(Protocol[A, B, C, D]):
+    project: Callable[[A], C]
+    inject: Callable[[A, D], B]
+
+
+def lift(lens: LensLike[A, B, C, D], fn: Callable[[C], D]) -> Callable[[A], B]:
+    def lifted(a: A) -> B:
+        return lens.inject(a, fn(lens.project(a)))
+
+    return lifted
+
+
+@pytree_dataclass(frozen=True)
 class Lens(Generic[A, B, C, D]):
     project: Callable[[A], C]
     inject: Callable[[A, D], B]
 
     def __call__(self, fn: Callable[[C], D]) -> Callable[[A], B]:
-        def lifted(a: A) -> B:
-            return self.inject(a, fn(self.project(a)))
-
-        return lifted
+        return lift(self, fn)
 
 
 T = TypeVar("T")

@@ -11,7 +11,7 @@ import lenses
 from jax_dataclasses import pytree_dataclass
 from jaxtyping import Array, Float  # type: ignore
 
-from flox._src.util.func import Lens
+from flox._src.util.func import Lens, LensLike, lift
 
 Volume = Float[Array, ""]
 
@@ -41,7 +41,7 @@ __all__ = [
     "Lambda",
     "Inverted",
     "VectorizedTransform",
-    "Stack",
+    "LayerStack",
 ]
 
 
@@ -72,7 +72,7 @@ def bind(a: Transformed[T], t: Transform[T, S]) -> Transformed[S]:
 
 
 def unpack_volume(
-    lens: Lens[A, B, C, D]
+    lens: LensLike[A, B, C, D]
 ) -> Lens[A, Transformed[B], C, Transformed[D]]:
     def inject(a: A, new: Transformed[D]) -> Transformed[B]:
         return Transformed(lens.inject(a, new.obj), new.ldj)
@@ -83,8 +83,8 @@ def unpack_volume(
 @pytree_dataclass(frozen=True)
 class LensedTransform(Transform[A, B], Generic[A, B, C, D]):
     transform: Transform[C, D]
-    forward_lens: Lens[A, B, C, D]
-    inverse_lens: Lens[B, A, D, C]
+    forward_lens: LensLike[A, B, C, D]
+    inverse_lens: LensLike[B, A, D, C]
 
     def forward(self, input: A) -> Transformed[B]:
         return unpack_volume(self.forward_lens)(self.transform.forward)(input)
@@ -96,19 +96,19 @@ class LensedTransform(Transform[A, B], Generic[A, B, C, D]):
 @pytree_dataclass(frozen=True)
 class Coupling(Transform[A, B], Generic[A, B, C, D, X, Y]):
     get_params: Callable[[X], Y]
-    get_forward_transform: Lens[A, Transform[C, D], X, Y]
-    get_inverse_transform: Lens[B, Transform[C, D], X, Y]
-    get_forward_target: Lens[A, B, C, D]
-    get_inverse_target: Lens[B, A, D, C]
+    get_forward_transform: LensLike[A, Transform[C, D], X, Y]
+    get_inverse_transform: LensLike[B, Transform[C, D], X, Y]
+    get_forward_target: LensLike[A, B, C, D]
+    get_inverse_target: LensLike[B, A, D, C]
 
     def forward(self, input: A) -> Transformed[B]:
-        transform = self.get_forward_transform(self.get_params)(input)
+        transform = lift(self.get_forward_transform, self.get_params)(input)
         return LensedTransform(
             transform, self.get_forward_target, self.get_inverse_target
         ).forward(input)
 
     def inverse(self, input: B) -> Transformed[A]:
-        transform = self.get_inverse_transform(self.get_params)(input)
+        transform = lift(self.get_inverse_transform, self.get_params)(input)
         return LensedTransform(
             transform, self.get_forward_target, self.get_inverse_target
         ).inverse(input)
@@ -188,73 +188,32 @@ class VectorizedTransform(Transform[Input, Output]):
 
 
 T = TypeVar("T")
-G = TypeVar("G")
 Op = Transform[T, T]
 
 
-def stack() -> jax.custom_vjp[Transformed[T]]:
-    def _apply_fwd_stack(
-        f: Op[T], x: T
-    ) -> tuple[Transformed[T], tuple[Op[T], Transformed[T]]]:
-        params, static = cast(
-            tuple[Op[T], Op[T]], eqx.partition(f, eqx.is_array)
-        )
+def layer_stack(x: T, f: Op[T], reverse: bool, unroll: int) -> Transformed[T]:
 
-        def body(
-            x: Transformed[T], params: Op[T]
-        ) -> tuple[Transformed[T], None]:
-            f = cast(Op[T], eqx.combine(params, static))
-            return bind(x, f), None
+    params, static = eqx.partition(f, eqx.is_array)  # type: ignore
 
-        y, _ = jax.lax.scan(
-            body,
-            init=pure(x),
-            xs=params,
-        )
+    def body(x: Transformed[T], params: Op[T]) -> tuple[Transformed[T], None]:
+        f: Op[T] = cast(Op[T], eqx.combine(params, static))
+        return bind(x, f), None  # type: ignore
 
-        return y, (f, y)
-
-    def _apply_bwd_stack(res: tuple[Transformed[T], Op[T]], g: G) -> tuple[G]:
-
-        f, y = res
-
-        params, static = cast(
-            tuple[Op[T], Op[T]], eqx.partition(f, eqx.is_array)
-        )
-
-        def body(
-            carry: tuple[G, Transformed[T]], params: Op[T]
-        ) -> tuple[tuple[G, Transformed[T]], None]:
-            f = cast(Op[T], eqx.combine(params, static))
-            g, y = carry
-            x = bind(y, f)
-            f_ = partial(bind, t=f)
-            g: G = jax.vjp(f_, x)[1](g)
-            return (g, x), None
-
-        y, f = res
-
-        (g, _), _ = jax.lax.scan(
-            body, init=(g, y), xs=Inverted(params), reverse=True
-        )
-
-        return g  # type: ignore
-
-    @jax.custom_vjp
-    def _apply_stack(f: Op[T], x: T) -> Transformed[T]:
-        return _apply_fwd_stack(f, x)[0]
-
-    _apply_stack.defvjp(_apply_fwd_stack, _apply_bwd_stack)
-
-    return _apply_stack
+    out, _ = jax.lax.scan(body, pure(x), params, reverse=reverse, unroll=unroll)
+    return out
 
 
-class Stack(eqx.Module, Generic[T]):
+class LayerStack(eqx.Module, Generic[T]):
 
     stacked: Op[T]
+    unroll: int = 1
 
     def forward(self, input: T) -> Transformed[T]:
-        return stack()(self.stacked, input)
+        return layer_stack(
+            input, self.stacked, reverse=False, unroll=self.unroll
+        )
 
     def inverse(self, input: T) -> Transformed[T]:
-        return stack()(Inverted(self.stacked), input)
+        return layer_stack(
+            input, Inverted(self.stacked), reverse=True, unroll=self.unroll
+        )

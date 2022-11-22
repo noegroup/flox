@@ -31,7 +31,7 @@ MatrixNxN = Float[Array, "N N"]
 Jacobian = MatrixNxN | Float[Array, "N-1 N-1"]
 
 
-Criterion = Callable[[VectorN], Scalar]
+Criterion = Callable[..., Scalar]
 
 
 @runtime_checkable
@@ -40,6 +40,9 @@ class Solver(Protocol):
         ...
 
     def update(self, params, state, *args, **kwargs) -> OptStep:
+        ...
+
+    def run(self, init_params, *args, **kwargs) -> OptStep:
         ...
 
 
@@ -111,14 +114,18 @@ def numeric_inverse(
     threshold: float = 1e-5,
     max_iters: int = 20,
 ) -> Callable[Concatenate[VectorN, P], VectorN]:
+    def criterion(
+        candidate: VectorN, target: VectorN, *args: P.args, **kwargs: P.kwargs
+    ) -> Scalar:
+        return squared_norm(forward(unit(candidate), *args, **kwargs) - target)
+
+    solver = solver_factory(criterion)
+
     @wraps(forward)
     def solve(init: VectorN, *args: P.args, **kwargs: P.kwargs) -> VectorN:
-        def criterion(candidate: VectorN) -> Scalar:
-            return squared_norm(
-                forward(unit(candidate), *args, **kwargs) - init
-            )
 
-        solver = solver_factory(criterion)
+        return unit(solver.run(init, init, *args, **kwargs).params)
+
         step = solver.update(init, solver.init_state(init))
 
         def cond(state: tuple[int, OptStep]) -> Bool[Array, ""]:
@@ -175,12 +182,12 @@ def inverse_log_volume(
 
         # TODO: mypy has no option to alter ParamSpecs
         #       might be possible to revise for future versions
-        def transform(x: VectorN, *args, **kwargs) -> Scalar:
+        def _transform(x: VectorN, *args, **kwargs) -> Scalar:
             return cast(Callable, transform)(x, *args, **kwargs)
 
-        Jx = differential(pin(transform))(x, *args, **kwargs)
+        Jx = differential(pin(_transform))(x, *args, **kwargs)
         Jx_pinv: Array = jnp.linalg.pinv(Jx)
-        dF = differential(pin(transform), embedded=True)
+        dF = differential(pin(_transform), embedded=True)
         dFx = dF(x, *args)
         dFx_inv: Array = jnp.linalg.inv(dFx)
         ddFx: Array = jax.jacobian(pin(dF))(x, *args, **kwargs)
@@ -197,7 +204,7 @@ def inverse_log_volume(
         ddFargs = jax.jacobian(pin(dF), argnums=range(1, len(args) + 1))(
             x, *args, **kwargs
         )
-        dFargs = differential(pin(transform), argnums=range(1, len(args) + 1))(
+        dFargs = differential(pin(_transform), argnums=range(1, len(args) + 1))(
             x, *args, **kwargs
         )
 

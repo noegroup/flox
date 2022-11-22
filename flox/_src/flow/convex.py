@@ -66,7 +66,7 @@ def potential(
     ctrlpts: Float[Array, "M N"],
     weights: Float[Array, "M+1"],
     bias: Float[Array, "M+1"],
-    eps: float = 1e-6,
+    eps: Scalar,
 ) -> Scalar:
     """Simple convex potential"""
     ctrlpts_ = jnp.concatenate([ctrlpts, input[None]], axis=0)
@@ -80,8 +80,9 @@ def potential_gradient(
     ctrlpts: Float[Array, "M N"],
     weights: Float[Array, "M+1"],
     bias: Float[Array, "M+1"],
+    eps: Scalar,
 ) -> VectorN:
-    return unit(jax.grad(potential)(input, ctrlpts, weights, bias))
+    return unit(jax.grad(potential)(input, ctrlpts, weights, bias, eps))
 
 
 def differential(
@@ -111,6 +112,37 @@ def differential(
 def numeric_inverse(
     forward: Callable[Concatenate[VectorN, P], VectorN],
     solver_factory: Callable[[Criterion], Solver] = partial(LBFGS),
+    threshold: float = 1e-6,
+    max_iters: int = 50,
+) -> Callable[Concatenate[VectorN, P], VectorN]:
+    @wraps(forward)
+    def solve(init: VectorN, *args: P.args, **kwargs: P.kwargs) -> VectorN:
+        def criterion(candidate: VectorN) -> Scalar:
+            return squared_norm(
+                forward(unit(candidate), *args, **kwargs) - init
+            )
+
+        solver = solver_factory(criterion)
+
+        step = solver.update(init, solver.init_state(init))
+
+        def cond(state: tuple[int, OptStep]) -> Bool[Array, ""]:
+            it, step = state
+            return (criterion(step.params) > threshold) & (it < max_iters)
+
+        def body(state: tuple[int, OptStep]) -> tuple[int, OptStep]:
+            it, step = state
+            step = solver.update(step.params, step.state)
+            return it + 1, step
+
+        return unit(jax.lax.while_loop(cond, body, (0, step))[1].params)
+
+    return solve
+
+
+def numeric_inverse_v2(
+    forward: Callable[Concatenate[VectorN, P], VectorN],
+    solver_factory: Callable[[Criterion], Solver] = partial(LBFGS),
     threshold: float = 1e-5,
     max_iters: int = 20,
 ) -> Callable[Concatenate[VectorN, P], VectorN]:
@@ -125,19 +157,6 @@ def numeric_inverse(
     def solve(init: VectorN, *args: P.args, **kwargs: P.kwargs) -> VectorN:
 
         return unit(solver.run(init, init, *args, **kwargs).params)
-
-        step = solver.update(init, solver.init_state(init))
-
-        def cond(state: tuple[int, OptStep]) -> Bool[Array, ""]:
-            it, step = state
-            return (criterion(step.params) > threshold) & (it < max_iters)
-
-        def body(state: tuple[int, OptStep]) -> tuple[int, OptStep]:
-            it, step = state
-            step = solver.update(step.params, step.state)
-            return it + 1, step
-
-        return unit(jax.lax.while_loop(cond, body, (0, step))[1].params)
 
     return solve
 

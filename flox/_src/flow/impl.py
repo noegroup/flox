@@ -114,27 +114,31 @@ class DoubleMoebius:
         )
 
 
+Scalar = Float[Array, ""]
+
+
 @pytree_dataclass(frozen=True)
 class ConvexPotential:
     ctrlpts: MatrixMxN
     weights: VectorM
     bias: VectorM
+    eps: Scalar
 
     def forward(self, input: VectorN) -> Transformed[VectorN]:
         output = potential_gradient(
-            input, self.ctrlpts, self.weights, self.bias
+            input, self.ctrlpts, self.weights, self.bias, self.eps
         )
         logprob = forward_log_volume(potential_gradient)(
-            input, self.ctrlpts, self.weights, self.bias
+            input, self.ctrlpts, self.weights, self.bias, self.eps
         )
         return Transformed(output, logprob)
 
     def inverse(self, input: VectorN) -> Transformed[VectorN]:
         output = numeric_inverse(potential_gradient)(
-            input, self.ctrlpts, self.weights, self.bias
+            input, self.ctrlpts, self.weights, self.bias, self.eps
         )
         logprob = inverse_log_volume(potential_gradient)(
-            output, self.ctrlpts, self.weights, self.bias
+            output, self.ctrlpts, self.weights, self.bias, self.eps
         )
         return Transformed(output, logprob)
 

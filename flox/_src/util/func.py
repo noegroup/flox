@@ -48,10 +48,18 @@ X = TypeVar("X")
 Y = TypeVar("Y")
 
 
-@pytree_dataclass(frozen=True)
-class LensLike(Protocol[A, B, C, D]):
-    project: Callable[[A], C]
-    inject: Callable[[A, D], B]
+A_ = TypeVar("A_", contravariant=True)
+B_ = TypeVar("B_", covariant=True)
+C_ = TypeVar("C_", covariant=True)
+D_ = TypeVar("D_", contravariant=True)
+
+
+class LensLike(Protocol[A_, B_, C_, D_]):
+    def project(self, state: A_) -> C_:
+        ...
+
+    def inject(self, state: A_, new: D_) -> B_:
+        ...
 
 
 def lift(lens: LensLike[A, B, C, D], fn: Callable[[C], D]) -> Callable[[A], B]:
@@ -62,7 +70,7 @@ def lift(lens: LensLike[A, B, C, D], fn: Callable[[C], D]) -> Callable[[A], B]:
 
 
 @pytree_dataclass(frozen=True)
-class Lens(Generic[A, B, C, D]):
+class Lens(LensLike[A, B, C, D]):
     project: Callable[[A], C]
     inject: Callable[[A, D], B]
 

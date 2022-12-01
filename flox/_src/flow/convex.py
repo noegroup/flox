@@ -18,7 +18,7 @@ from jaxopt._src.base import OptStep
 from jaxopt._src.lbfgs import LBFGS
 from jaxtyping import Array, Bool, Float  # type: ignore
 
-from flox._src.geom.euclidean import inner, squared_norm, unit
+from flox._src.geom.euclidean import det, inner, squared_norm, unit
 from flox._src.geom.manifold import TangentSpaceMethod, tangent_space
 from flox._src.util.func import compose, pipe
 
@@ -48,17 +48,6 @@ class Solver(Protocol):
 
 P = ParamSpec("P")
 R = TypeVar("R")
-
-
-def det3x3(M: Matrix3x3) -> Scalar:
-    return inner(M[0], jnp.cross(M[1], M[2]))
-
-
-def det(M: MatrixNxN) -> Scalar:
-    if M.shape == (3, 3):
-        return det3x3(M)
-    else:
-        return jnp.linalg.det(M)
 
 
 def potential(

@@ -14,10 +14,14 @@ __all__ = [
     "norm",
     "squared_norm",
     "unit",
+    "det",
+    "det3x3",
 ]
 
 Scalar = Float[Array, ""]
 VectorN = Float[Array, "N"]
+Matrix3x3 = Float[Array, "3"]
+MatrixNxN = Float[Array, "N"]
 
 
 def proj(v: VectorN, u: VectorN) -> VectorN:
@@ -73,3 +77,14 @@ def squared_norm(x: VectorN, eps: float = 1e-12) -> Scalar:
 def unit(x: VectorN) -> VectorN:
     """normalizes a vector and turns it into a unit vector"""
     return x * jax.lax.rsqrt(squared_norm(x))
+
+
+def det3x3(M: Matrix3x3) -> Scalar:
+    return inner(M[0], jnp.cross(M[1], M[2]))
+
+
+def det(M: MatrixNxN) -> Scalar:
+    if M.shape == (3, 3):
+        return det3x3(M)
+    else:
+        return jnp.linalg.det(M)

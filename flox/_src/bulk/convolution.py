@@ -113,7 +113,7 @@ def conv_nd(inp, kernel, batch_dim=False, periodic=True):
     out = jax.lax.conv_general_dilated(
         inp,
         kernel,
-        window_strides=(1, 1),
+        window_strides=(1,) * ndims,
         padding="VALID",
         lhs_dilation=None,
         rhs_dilation=None,

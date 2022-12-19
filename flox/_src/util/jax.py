@@ -68,7 +68,7 @@ def key_chain(
     """returns an iterator that automatically splits jax.random.PRNGKeys"""
 
     if isinstance(seed, int) or seed.ndim == 0:
-        key = jax.random.PRNGKey(int(seed))
+        key = jax.random.PRNGKey(seed)
     else:
         key, _ = jax.random.split(seed)
     while True:

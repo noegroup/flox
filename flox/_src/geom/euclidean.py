@@ -79,12 +79,25 @@ def unit(x: VectorN) -> VectorN:
     return x * jax.lax.rsqrt(squared_norm(x))
 
 
+def det1x1(M: Array) -> Scalar:
+    return M[0, 0]
+
+
+def det2x2(M: Array) -> Scalar:
+    return M[0, 0] * M[1, 1] - M[0, 1] * M[1, 0]
+
+
 def det3x3(M: Matrix3x3) -> Scalar:
     return inner(M[0], jnp.cross(M[1], M[2]))
 
 
 def det(M: MatrixNxN) -> Scalar:
-    if M.shape == (3, 3):
-        return det3x3(M)
-    else:
-        return jnp.linalg.det(M)
+    match M.shape:
+        case (1, 1):
+            return det1x1(M)
+        case (2, 2):
+            return det2x2(M)
+        case (3, 3):
+            return det3x3(M)
+        case _:
+            return jnp.linalg.det(M)

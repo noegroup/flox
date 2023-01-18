@@ -99,9 +99,9 @@ def tangent_space(
             *_, V = jnp.linalg.svd(jnp.outer(p, p))
             tangent_space = V[1:]
         case TangentSpaceMethod.GramSchmidt:
-            dim = len(p)
+            dim = p.shape[0]
             vs = jnp.eye(dim)
-            idx = jnp.argsort(vs @ p)
+            idx = jnp.argsort(vs @ p)[::-1]
             vs = jnp.concatenate([p[None], vs[idx[:-1]]])
             tangent_space = gram_schmidt(cast(Array, vs))[1:]
         case _:

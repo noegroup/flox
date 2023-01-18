@@ -16,7 +16,7 @@ def moebius_project(
     """projects p along q back onto the hypersphere
     this is a n-dimensional moebius transform
     """
-    return p - 2 * proj(p, q - p)
+    return -(p - 2 * proj(p, q - p))
 
 
 def double_moebius_project(
@@ -72,7 +72,7 @@ def double_moebius_inverse(
         cast(Array, jnp.stack([ux, uy])), r
     )  # solve problem on great circle
 
-    return x * dx + y * dy  # project back on hyper-sphere
+    return -(x * dx + y * dy)  # project back on hyper-sphere
 
 
 def double_moebius_volume_change(

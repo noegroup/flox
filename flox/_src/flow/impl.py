@@ -80,7 +80,7 @@ class Moebius:
         return Transformed(*moebius_forward(input, self.reflection))
 
     def inverse(self, input: VectorN) -> Transformed[VectorN]:
-        return Transformed(*moebius_forward(input, self.reflection))
+        return Transformed(*moebius_forward(input, -self.reflection))
 
 
 def double_moebius_forward_transform(
@@ -110,7 +110,7 @@ class DoubleMoebius:
 
     def inverse(self, input: VectorN) -> Transformed[VectorN]:
         return Transformed(
-            *double_moebius_inverse_transform(input, self.reflection)
+            *double_moebius_inverse_transform(input, -self.reflection)
         )
 
 
